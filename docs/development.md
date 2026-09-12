@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Firefox 78 or newer (Developer Edition or Nightly recommended — they allow
+- Firefox 140 or newer (Developer Edition or Nightly recommended — they allow
   unsigned extensions permanently via `xpinstall.signatures.required = false`).
 - Node.js (for `web-ext` only; the extension itself has no dependencies).
 
@@ -74,24 +74,18 @@ document.querySelectorAll("audio, video").forEach(el =>
 ## Linting
 
 ```sh
-web-ext lint --source-dir ./volume-boost
+web-ext lint --source-dir ./volume-boost --warnings-as-errors
 ```
 
 CI runs this on every push and pull request (see
-[`.github/workflows/lint.yml`](../../.github/workflows/lint.yml)). Errors fail
-the build; warnings are printed. Fix or justify every warning before merging.
+[`.github/workflows/lint.yml`](../../.github/workflows/lint.yml)) and fails on
+any warning.
 
-**Known warning:** `MISSING_DATA_COLLECTION_PERMISSIONS`. Firefox 140+ requires
-`browser_specific_settings.gecko.data_collection_permissions` in the manifest
-for new AMO submissions. Adding it while `strict_min_version` is `78` produces
-a different warning (key unsupported by the minimum version). Before the first
-AMO submission, bump `strict_min_version` to `140` and add:
-
-```json
-"data_collection_permissions": { "required": ["none"] }
-```
-
-(`"none"` is accurate — the extension collects and transmits no data.)
+The manifest declares `data_collection_permissions: { required: ["none"] }`,
+which Firefox 140+ requires for AMO submissions. That key is why
+`strict_min_version` is `140.0` for desktop and `142.0` for Android
+(`gecko_android`) — older builds don't recognise it and the linter flags the
+mismatch.
 
 ## Manual test checklist
 
@@ -161,7 +155,7 @@ playback and browser audio routing. Run through this before every release.
 1. Bump `version` in `manifest.json`. Use semver; patch for fixes, minor for
    features.
 2. Run the manual test checklist above.
-3. Lint: `web-ext lint --source-dir ./volume-boost`.
+3. Lint: `web-ext lint --source-dir ./volume-boost --warnings-as-errors`.
 4. Build:
    ```sh
    web-ext build --source-dir ./volume-boost --overwrite-dest

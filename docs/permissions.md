@@ -121,6 +121,19 @@ matter for media behind cookie-based auth on a third-party origin, which is why
 the injection is limited to tabs where the user has explicitly opted in by
 enabling boost.
 
+## Data collection declaration
+
+The manifest declares:
+
+```json
+"data_collection_permissions": { "required": ["none"] }
+```
+
+This is the Firefox 140+ built-in data-consent declaration. `"none"` is
+accurate: the extension makes no network requests of its own, stores only
+site origins with a saved boost level (locally, unsynced), and transmits
+nothing anywhere.
+
 ## Permissions not requested
 
 - `tabCapture` — an alternative approach captures the tab's audio stream and

@@ -4,7 +4,7 @@ A Firefox extension that boosts the audio of the active tab beyond 100%, with a
 built-in limiter to keep extreme boost levels from clipping into painful
 distortion.
 
-**Version:** 0.2.0 · **Manifest:** v2 · **Minimum Firefox:** 78
+**Version:** 0.2.0 · **Manifest:** v2 · **Minimum Firefox:** 140 (desktop) / 142 (Android)
 
 ## What it does
 
@@ -129,4 +129,5 @@ and the listener is removed entirely when no such tabs remain. See
 
 ## License
 
-No license has been chosen yet. Until one is added, all rights are reserved.
+Public domain under [The Unlicense](../LICENSE). Copy it, fork it, sell it,
+strip the name off it — no attribution required.
