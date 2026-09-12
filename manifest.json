@@ -1,0 +1,46 @@
+{
+  "manifest_version": 2,
+  "name": "Volume Boost",
+  "version": "0.2.0",
+  "description": "Boosts the audio of the active tab with a safe limiter.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "volume-boost@inklikeurine.dev",
+      "strict_min_version": "78.0"
+    }
+  },
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "webRequest",
+    "webRequestBlocking",
+    "<all_urls>"
+  ],
+  "browser_action": {
+    "default_title": "Volume Boost",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "persistent": true
+  },
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  }
+}

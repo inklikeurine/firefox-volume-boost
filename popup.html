@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=360, height=190, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Volume Boost</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="app" id="app" data-enabled="false">
+      <header class="header">
+        <div class="tab-info">
+          <div class="favicon-wrap">
+            <img id="favicon" alt="" />
+          </div>
+          <div class="tab-meta">
+            <div class="tab-title" id="tabTitle">Active Tab</div>
+            <div class="tab-status" id="statusText">Boost Off</div>
+          </div>
+        </div>
+        <label class="toggle" aria-label="Toggle boost">
+          <input type="checkbox" id="enabledToggle" />
+          <span class="toggle-track"></span>
+        </label>
+      </header>
+
+      <section class="slider-section">
+        <div class="readout-row">
+          <div class="readout" id="readout">100%</div>
+          <button class="ghost" id="resetBtn" type="button">Reset</button>
+        </div>
+        <input
+          type="range"
+          id="boostSlider"
+          min="0"
+          max="600"
+          value="100"
+          step="1"
+          aria-label="Boost percent"
+        />
+        <div class="slider-labels">
+          <span>0%</span>
+          <span id="maxLabel" title="Double-click to set max">Max 600%</span>
+        </div>
+      </section>
+
+      <section class="presets" id="presets">
+        <button class="chip" type="button" data-preset="10">10%</button>
+        <button class="chip" type="button" data-preset="50">50%</button>
+        <button class="chip" type="button" data-preset="80">80%</button>
+        <button class="chip" type="button" data-preset="100">100%</button>
+        <button class="chip" type="button" data-preset="200">200%</button>
+        <button class="chip" type="button" data-preset="max-20">MAX-20</button>
+      </section>
+
+      <section class="options">
+        <label class="option">
+          <input type="checkbox" id="perSiteToggle" />
+          Remember per-site
+        </label>
+        <div class="warning" id="warning">Extreme boost can distort audio.</div>
+      </section>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
