@@ -182,5 +182,6 @@ playback and browser audio routing. Run through this before every release.
 - Clamp any number that crosses a process boundary (popup → background →
   content) on the receiving side; never trust the sender's range.
 - Message handlers always respond, even on error.
-- Keep [agents.md](../agents.md) in sync when behaviour or permissions change —
-  it's the spec that AI coding tools read before editing this extension.
+- Keep [docs/spec.md](./spec.md) in sync when behaviour or permissions change —
+  it's the spec AI coding tools read before editing this extension; the
+  repo-wide rules are in the root [AGENTS.md](../../AGENTS.md).

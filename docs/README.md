@@ -10,5 +10,6 @@
 | [learnings-reference-extension.md](./learnings-reference-extension.md) | Background: notes from studying a comparable published extension that informed the design. |
 | [learnings-firefox-popup.md](./learnings-firefox-popup.md) | Background: Firefox-specific popup sizing and rendering gotchas. |
 
-The product spec and guidance for AI coding agents lives one level up in
-[`../agents.md`](../agents.md).
+The product spec is [spec.md](./spec.md) in this folder. The rules AI coding
+agents follow for every extension in this repository are in the root
+[`AGENTS.md`](../../AGENTS.md).

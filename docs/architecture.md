@@ -19,7 +19,7 @@ and why the CORS header injection exists.
 
 | File | Runs in | Responsibility |
 | --- | --- | --- |
-| `background.js` | Persistent background page | Single source of truth for settings and which tab is boosted. Persists to `storage.local`. Owns the CORS header-injection listener. Reacts to tab activation/navigation/close. |
+| `background.js` | Persistent background page | Single source of truth for settings and which tab is boosted. Persists to `storage.local`. Owns the CORS header-injection listener. Reacts to tab activation/navigation/close. **Why persistent, not an event page:** the boosted tab id and the set of CORS-armed tabs are session state that cannot be rebuilt from storage, and the blocking `webRequest` listener must stay registered while any tab is armed. |
 | `content.js` | Every page and every frame (`<all_urls>`, `document_idle`) | Builds the Web Audio graph, attaches media elements to it, applies gain. Stateless with respect to settings — it only knows what the background last told it. |
 | `popup.js` / `popup.html` / `popup.css` | Browser-action popup | Renders state, sends user intent to the background. Never talks to the content script directly. |
 
