@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=360, height=190, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=360, initial-scale=1.0" />
     <title>Volume Boost</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
@@ -15,12 +15,12 @@
           </div>
           <div class="tab-meta">
             <div class="tab-title" id="tabTitle">Active Tab</div>
-            <div class="tab-status" id="statusText">Boost Off</div>
+            <div class="tab-status" id="statusText" role="status" aria-live="polite">Boost Off</div>
           </div>
         </div>
-        <label class="toggle" aria-label="Toggle boost">
-          <input type="checkbox" id="enabledToggle" />
-          <span class="toggle-track"></span>
+        <label class="toggle">
+          <input type="checkbox" id="enabledToggle" role="switch" aria-label="Boost this tab" />
+          <span class="toggle-track" aria-hidden="true"></span>
         </label>
       </header>
 
@@ -33,14 +33,24 @@
           type="range"
           id="boostSlider"
           min="0"
-          max="600"
+          max="200"
           value="100"
           step="1"
           aria-label="Boost percent"
         />
         <div class="slider-labels">
           <span>0%</span>
-          <span id="maxLabel" title="Double-click to set max">Max 600%</span>
+          <button
+            class="max-button"
+            id="maxLabel"
+            type="button"
+            title="Double-click, or press Enter, to change the maximum"
+          >Max 200%</button>
+          <form class="max-editor" id="maxEditor" novalidate hidden>
+            <label for="maxInput">Max</label>
+            <input id="maxInput" type="number" min="1" max="1000" step="1" />
+            <span>%</span>
+          </form>
         </div>
       </section>
 
@@ -49,8 +59,8 @@
         <button class="chip" type="button" data-preset="50">50%</button>
         <button class="chip" type="button" data-preset="80">80%</button>
         <button class="chip" type="button" data-preset="100">100%</button>
-        <button class="chip" type="button" data-preset="200">200%</button>
-        <button class="chip" type="button" data-preset="max-20">MAX-20</button>
+        <button class="chip" type="button" data-preset="120">120%</button>
+        <button class="chip" type="button" data-preset="max">MAX</button>
       </section>
 
       <section class="options">
@@ -58,8 +68,10 @@
           <input type="checkbox" id="perSiteToggle" />
           Remember per-site
         </label>
-        <div class="warning" id="warning">Extreme boost can distort audio.</div>
+        <button class="ghost" id="forgetBtn" type="button">Forget saved sites</button>
       </section>
+
+      <div class="warning" id="warning">Extreme boost can distort audio.</div>
     </div>
 
     <script src="popup.js"></script>

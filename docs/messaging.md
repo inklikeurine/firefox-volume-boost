@@ -4,11 +4,19 @@ All communication goes through the background script. The popup never messages
 the content script directly.
 
 - **Popup → Background:** `browser.runtime.sendMessage(message)`
+- **Content script → Background:** `browser.runtime.sendMessage(message)`
+  (`frameReady`, `frameStatus`; the background reads the tab and frame from
+  `sender`)
 - **Background → Content script:** `browser.tabs.sendMessage(tabId, message)`
+  (every frame of the tab)
+- **Background → Popup:** `browser.runtime.sendMessage(message)`
+  (`statusChanged`; fails harmlessly when no popup is open)
 
 Every message is a plain object with a `type` string. Every handler responds
 (the background listener returns `true` to keep the channel open for its async
-handler). Unknown or malformed messages get `{ ok: false, error: "..." }`.
+handler). Unknown or malformed messages get `{ ok: false, error: "..." }`. The
+popup's listener answers only `statusChanged` and leaves every other type to
+the background.
 
 ## Popup → Background
 
@@ -22,24 +30,28 @@ Fetch everything the popup needs to render.
 
 // response
 {
-  enabled: boolean,        // is *this* tab the currently boosted tab
-  boostPercent: number,    // resolved for this tab (per-site if applicable)
+  enabled: boolean,        // is this tab boosted
+  boostPercent: number,    // the tab's level if boosted, else the level it would get (per-site if applicable)
   maxBoostPercent: number,
-  perSite: boolean
+  perSite: boolean,
+  savedSites: number,      // how many per-site levels are stored
+  attached: number,        // media elements boosted, all frames of the tab
+  failed: number           // media elements that refused, all frames of the tab
 }
 ```
 
 ### `setBoost`
 
-Change the boost level. Persists (debounced) and, if this tab is currently
-boosted, pushes the new level to the content script immediately.
+Change the boost level. Persists (debounced) and, if this tab is boosted,
+pushes the new level to it immediately and updates its badge. Other boosted
+tabs keep their levels.
 
 ```js
 // request
 { type: "setBoost", tabId, value: number }
 
 // response
-{ boostPercent: number }   // clamped to 0..maxBoostPercent
+{ boostPercent: number }   // rounded, clamped to 0..maxBoostPercent
 ```
 
 In per-site mode this also writes `siteBoosts[origin] = value` for the tab's
@@ -47,9 +59,8 @@ origin (HTTP/HTTPS only).
 
 ### `reset`
 
-Alias for `setBoost` with `value: 100`. The popup currently calls `setBoost`
-directly for Reset, but the message exists for future use (e.g. a keyboard
-command).
+Alias for `setBoost` with `value: 100`. The popup calls `setBoost` directly
+for its Reset button.
 
 ```js
 { type: "reset", tabId }
@@ -58,15 +69,16 @@ command).
 
 ### `setMaxBoost`
 
-Change the slider ceiling. Clamps the global level and every stored per-site
-level down to the new max, then re-applies to the boosted tab if any.
+Change the slider ceiling. Clamps the global level, every stored per-site
+level and every boosted tab's level down to the new max, and re-applies to the
+boosted tabs.
 
 ```js
 // request
 { type: "setMaxBoost", value: number }
 
 // response
-{ maxBoostPercent: number }   // clamped to 1..5000
+{ maxBoostPercent: number }   // 1..1000; a non-number or a value below 1 gives the default 200
 ```
 
 ### `setPerSite`
@@ -83,9 +95,23 @@ immediately stored for the current tab's origin so the site doesn't appear to
 { perSite: boolean }
 ```
 
+### `resetSettings`
+
+Forget every per-site level and restore the defaults (max 200, level 100,
+per-site off). Saved at once. Boosted tabs stay boosted, at 100%.
+
+```js
+// request
+{ type: "resetSettings" }
+
+// response
+{ ok: true, forgotten: number, boostPercent: 100, maxBoostPercent: 200, perSite: false }
+```
+
 ### `setEnabled`
 
-Turn boost on or off for a tab.
+Turn boost on or off for a tab. Turning it on in one tab never turns it off in
+another.
 
 ```js
 // request
@@ -99,46 +125,92 @@ Possible responses:
 
 ```js
 { enabled: true }
-{ enabled: true,  warning: "Media on this page could not be boosted" }
 { enabled: false }
-{ enabled: false, error: "Tab is not active" }
-{ enabled: false, error: "<message from tabs.sendMessage failure>" }
+{ enabled: false, error: "Can't boost this page. Try reloading it." }
 ```
 
-- `"Tab is not active"` — the popup's tab is no longer the active tab in the
-  current window. Only the active tab may be boosted.
-- The `warning` variant means the content script responded but reported
-  `failed > 0` and `attached === 0`: every media element on the page refused to
-  attach (usually because another `AudioContext` already owns them).
-- A `tabs.sendMessage` failure (typically "Could not establish connection" on
-  a restricted page) is returned as `error`, and the tab is not marked enabled.
+The error means `tabs.sendMessage` failed: no content script answered in the
+tab (Firefox's own `about:` pages, addons.mozilla.org, the PDF viewer, or a
+page still loading). The tab is not marked boosted and its CORS arming is
+undone. Whether media was actually found is not part of this answer; it
+arrives through `frameStatus` and `getState`.
+
+## Content script → Background
+
+### `frameReady`
+
+Sent once by every frame when its content script loads. The answer says
+whether the frame's tab is boosted, so a reloaded page or an embedded player
+inserted later starts boosted.
+
+```js
+// request
+{ type: "frameReady" }
+
+// response
+{ enabled: true, boostPercent: number }
+{ enabled: false }
+```
+
+### `frameStatus`
+
+Sent by a frame whenever its own counts change. The background stores them per
+`sender.frameId` (replacing that frame's previous report), clears a tab's
+counts when it starts loading a new document, and sends the popup
+`statusChanged`.
+
+```js
+// request
+{ type: "frameStatus", attached: number, failed: number }
+
+// response
+{ ok: true }
+{ ok: false, error: "Not sent from a tab" }
+```
+
+## Background → Popup
+
+### `statusChanged`
+
+A frame of `tabId` reported new counts. The popup, if it shows that tab,
+re-reads `getState` and updates its status line.
+
+```js
+// request
+{ type: "statusChanged", tabId }
+
+// response (popup)
+{ ok: true }
+```
 
 ## Background → Content script
 
 ### `applyBoost`
 
-The only command the content script accepts from the background. Both fields
-are optional; omitted fields leave the content script's state untouched.
+The only command the content script accepts from the background. It goes to
+every frame of the tab. Both fields are optional; omitted fields leave the
+content script's state untouched.
 
 ```js
 // request
 { type: "applyBoost", enabled?: boolean, boostPercent?: number }
 
-// response
+// response (the first frame to answer)
 {
   ok: true,
   enabled: boolean,
-  boostPercent: number,     // clamped to 0..5000
-  attached: number,         // media elements successfully routed through Web Audio
-  failed: number            // media elements that threw on attach
+  boostPercent: number,     // clamped to 0..1000
+  attached: number,         // this frame's elements routed through Web Audio
+  failed: number            // this frame's elements that threw on attach
 }
 ```
 
 Behaviour on receipt:
 
-- `enabled: true` → build the audio graph if needed, set gain, start the 1 s
-  scan loop.
-- `enabled: false` → set gain to 1.0, stop scanning. Graph and existing source
+- `enabled: true` → build the audio graph if needed, set gain, attach the
+  frame's media, start watching for more (`MutationObserver` plus capture-phase
+  `loadstart`/`play` listeners), report counts if they changed.
+- `enabled: false` → set gain to 1.0, stop watching. Graph and existing source
   nodes are retained (see [architecture.md](./architecture.md#attach-lifecycle)).
 
 The background sends `applyBoost { enabled: false, boostPercent: 100 }` when
@@ -147,8 +219,7 @@ forced to 100 anyway.
 
 ### `getState` (content script)
 
-Diagnostic query; not currently used by the background or popup but available
-for debugging from the console.
+Diagnostic query, used by the live test harness; not used by the popup.
 
 ```js
 // request
@@ -159,38 +230,39 @@ for debugging from the console.
 
 ## Sequence: enabling boost from the popup
 
-```
-Popup                       Background                        Content script
+```text
+Popup                       Background                        Content script (each frame)
   │                              │                                   │
-  │ setBoost {value: 250}        │                                   │
-  │─────────────────────────────▶│ state.boostPercent = 250          │
-  │                              │ siteBoosts[origin] = 250 (if perSite)
+  │ setBoost {value: 150}        │                                   │
+  │─────────────────────────────▶│ state.boostPercent = 150          │
+  │                              │ siteBoosts[origin] = 150 (if perSite)
   │                              │ scheduleSave()                    │
-  │◀─────────────────────────────│ {boostPercent: 250}               │
+  │◀─────────────────────────────│ {boostPercent: 150}               │
   │                              │                                   │
   │ setEnabled {value: true,     │                                   │
-  │             boostPercent:250}│                                   │
-  │─────────────────────────────▶│ verify tab is active              │
-  │                              │ disable previous tab (if any)     │
-  │                              │ enabledTabId = tabId              │
-  │                              │ corsTabs.add(tabId)               │
-  │                              │ applyBoost {enabled:true, 250}    │
-  │                              │──────────────────────────────────▶│ ensureAudioGraph()
-  │                              │                                   │ setGain(250)
-  │                              │                                   │ startScanning()
+  │             boostPercent:150}│                                   │
+  │─────────────────────────────▶│ boostedTabs.set(tab, 150)         │
+  │                              │ corsTabs.add(tab)                 │
+  │                              │ applyBoost {enabled:true, 150}    │
+  │                              │──────────────────────────────────▶│ ensureAudioGraph(), setGain(150)
+  │                              │                                   │ attach media, start watching
   │                              │◀──────────────────────────────────│ {ok, attached, failed}
-  │◀─────────────────────────────│ {enabled: true[, warning]}        │
-  │ setEnabledUI(true)           │                                   │
+  │                              │ badge "150"                       │
+  │◀─────────────────────────────│ {enabled: true}                   │
+  │ getState → status line       │                                   │
+  │                              │◀──────────────────────────────────│ frameStatus {attached, failed}
+  │◀─────────────────────────────│ statusChanged {tabId}             │
+  │ getState → "Boost On"        │                                   │
 ```
 
-## Sequence: user switches tabs
+## Sequence: a frame loads into a boosted tab
 
-```
-Firefox                     Background                        Content script (old tab)
-  │ tabs.onActivated             │                                   │
-  │─────────────────────────────▶│ enabledTabId !== newTab?          │
-  │                              │ applyBoost {enabled:false, 100}   │
-  │                              │──────────────────────────────────▶│ setGain(100)
-  │                              │ enabledTabId = null               │ stopScanning()
-  │                              │ (tab stays in corsTabs)           │
+```text
+Content script (new frame)        Background
+  │ frameReady                         │
+  │───────────────────────────────────▶│ boostedTabs.has(sender.tab.id)?
+  │◀───────────────────────────────────│ {enabled: true, boostPercent: 150}
+  │ applyState(): graph, gain, attach  │
+  │ frameStatus {attached, failed}     │
+  │───────────────────────────────────▶│ mediaCounts[tab][frameId] = …
 ```

@@ -15,19 +15,17 @@ the cause. If you hear silence, see the next section.
 
 **The media element couldn't be attached.**
 Open the popup: if the status line says *"Media on this page could not be
-boosted"*, every element on the page threw on
+boosted"*, every element on the page and its embedded frames threw on
 `createMediaElementSource`. The usual reason is that the page's player already
 routes the element through its own `AudioContext` — an element can only belong
 to one. There is no fix from our side; the page's player owns the audio.
 
-**The media element hasn't been found yet.**
-The scan runs every second. If the player creates the `<video>` after boost
-was enabled it will be picked up on the next tick. If it's inside a
-closed shadow root, `querySelectorAll` can't see it — this is a known gap.
-
-**Boost got disabled because you switched tabs.**
-Only the active tab is boosted. Switching away and back turns it off; reopen
-the popup and toggle it on again.
+**The media element hasn't been found.**
+If the status line says *"Boost On — no media found yet"*, no frame of the page
+has a media element with a source. A player that adds its `<video>` later, or
+gives it a source later, is picked up as soon as it does. Two cases are never
+found: media the page plays without adding it to the document, and elements
+inside a shadow root.
 
 ## Audio goes silent when boost is enabled
 
@@ -43,9 +41,9 @@ connected to the graph but its bytes were loaded without CORS approval.
      is `true`. If the request type isn't `media` (some players fetch via
      XHR/fetch and feed MSE), the filter deliberately won't touch it — but MSE
      sources are `blob:` and same-origin, so they shouldn't taint either.
-   - **Yes** → check the request has `crossorigin="anonymous"` on the element
-     (`document.querySelector("video").crossOrigin`). If it's `null` the
-     content script decided the source was same-origin; verify with
+   - **Yes** → check the element is in CORS mode
+     (`document.querySelector("video").crossOrigin` is `"anonymous"`). If it's
+     `null` the content script decided the source was same-origin; verify with
      `new URL(el.currentSrc).origin === location.origin`.
 3. If the header is present and the element is CORS-mode but audio is still
    silent, the element may have been attached *before* the CORS reload
@@ -61,28 +59,31 @@ reloading the page restores normal playback.
 Expected on first enable for cross-origin media: the element is reloaded with
 `crossorigin="anonymous"`, and the content script restores `currentTime` and
 play state on `loadedmetadata`. A brief stutter is normal. If it restarts from
-0 every time, the seek is failing — check the console for errors; some
+0 every time, the seek is failing — the page console shows a
+`[volume-boost] could not restore the playback position` warning; some
 streaming players reject external `currentTime` writes.
 
-## Popup shows an error instead of "Boost On"
+## What the popup's status line means
 
 | Status text | Meaning |
 | --- | --- |
-| `Tab is not active` | The popup was opened, the user switched tabs (e.g. via keyboard) before toggling. Close and reopen the popup on the tab you want. |
-| `Could not establish connection. Receiving end does not exist.` | No content script in this tab. Restricted page (`about:*`, `moz-extension:*`, AMO, PDF viewer, reader view), or the extension was just installed/reloaded and the page hasn't been reloaded since. Reload the page. |
-| `Media on this page could not be boosted` | Boost *is* on, but no media element could be attached. See above. |
-| `Max must be 1% or higher` | The max-boost prompt got a non-number or a value below 1. |
+| `Boost Off` | This tab is not boosted. |
+| `Boost On` | This tab is boosted and at least one media element is routed through the boost. |
+| `Boost On — no media found yet` | This tab is boosted, but no frame has media with a source yet. It changes to `Boost On` when media appears. |
+| `Media on this page could not be boosted` | Boost *is* on, but every media element refused to attach. See above. |
+| `Can't boost this page. Try reloading it.` | No content script answered in this tab: Firefox's own pages (`about:`, `moz-extension:`…), addons.mozilla.org and the PDF viewer refuse them; a page still loading may not have one yet. |
+| `Max must be between 1% and 1000%` | The Max field got a non-number or a value outside 1–1000. |
 
 ## Boost doesn't come back after reload
 
-`tabs.onUpdated` re-applies boost when the boosted tab reaches
-`status: "complete"`. If it doesn't:
+A boosted tab stays boosted through reloads: each frame asks the background
+when it loads, and the tab is re-applied when it finishes loading. If it
+doesn't come back:
 
-- Confirm the tab is still `state.enabledTabId` in the background inspector.
-  Switching tabs during the reload would have cleared it.
-- Some pages fire `complete` before their player has created any media
-  element. Boost is applied (gain set, scanning started) and the element is
-  attached on a later scan tick — give it a second.
+- In the background inspector, check `boostedTabs.has(<tab id>)`. Closing the
+  tab, or turning boost off, removes it.
+- Some pages load their player after `complete`; the content script attaches
+  it when it appears, so give it a second.
 
 ## Settings didn't persist
 
@@ -98,23 +99,24 @@ streaming players reject external `currentTime` writes.
 
 Firefox sizes browser-action popups from the document's layout, and gets it
 wrong if the body isn't explicitly sized. `popup.css` sets fixed
-`width`/`height` on `body` and `overflow: hidden`. If you've edited the CSS and
-the popup is misbehaving, that's the first place to look. Details in
-[learnings-firefox-popup.md](./learnings-firefox-popup.md).
+`width`/`height` on `body` and `overflow: hidden`, and the `.app` grid's single
+`minmax(0, 1fr)` column keeps a long tab title from widening the popup. If
+you've edited the CSS and the popup is misbehaving, that's the first place to
+look. Details in [architecture.md](./architecture.md#popup).
 
 ## Distortion at high boost
 
 The limiter (12:1 above −6 dB) keeps things listenable up to a few hundred
-percent. Beyond ~1000% you're asking a compressor to absorb 20 dB of gain and it
-will pump and crunch. The popup warns at 1000%. If you need that much boost,
-the source is probably broken (badly mastered, wrong channel) and a lower value
+percent. Beyond that you're asking a compressor to absorb a lot of gain and it
+will pump and crunch; the popup warns from 300%. If you need much more, the
+source is probably broken (badly mastered, wrong channel) and a lower value
 plus system volume will sound better.
 
-## Extension works in one tab but not after opening a second instance of the same site
+## Two tabs, two levels
 
-Only one tab is boosted at a time, by design. Per-site memory stores the
-*level* per origin, not the *enabled* state — you still have to toggle boost on
-in each tab.
+Each tab has its own switch and its own level, shown on the toolbar icon while
+that tab is selected. Per-site memory stores the *level* per origin, not
+whether boost is on — you still turn boost on in each tab.
 
 ## Reporting a bug
 
@@ -124,5 +126,8 @@ Include:
 - The page URL (or a description if private) and whether the media is
   same-origin, cross-origin, or an embedded iframe player.
 - The popup status text.
-- Output of `state` and `[...corsTabs]` from the background inspector.
-- Any errors in the background inspector console and the page console.
+- Output of `state`, `[...boostedTabs]`, `[...corsTabs]` and
+  `[...mediaCounts].map(([tab, frames]) => [tab, [...frames]])` from the
+  background inspector.
+- Any `[volume-boost]` warnings in the background inspector console and the
+  page console.

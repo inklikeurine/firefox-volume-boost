@@ -10,36 +10,32 @@ source.
 
 | Permission | Used in | Scope |
 | --- | --- | --- |
-| `activeTab` | popup.js, background.js | Active tab only |
-| `tabs` | popup.js, background.js | Read `url`, `title`, `favIconUrl`; tab lifecycle events |
 | `storage` | background.js | `storage.local` only, four keys |
-| `<all_urls>` | manifest (content script), background.js | Content script on all pages; webRequest filter |
+| `<all_urls>` | manifest (content script), background.js, popup.js | Content script on all pages; a tab's `url`, `title`, `favIconUrl`; webRequest filter |
 | `webRequest` | background.js | `onHeadersReceived`, `types: ["media"]` |
 | `webRequestBlocking` | background.js | Required to *modify* response headers |
 
 ## Details
 
-### `activeTab` and `tabs`
+### Tabs without the `tabs` permission
 
-**What for:**
+Volume Boost does not request `tabs` or `activeTab`. What it needs from tabs
+comes with `<all_urls>` or needs no permission at all:
 
-- `tabs.query({ active: true, currentWindow: true })` — the popup needs to know
-  which tab it was opened on, and the background verifies that a
-  `setEnabled` request targets the active tab.
-- `tabs.get(tabId).url` — to derive the site origin for per-site boost
-  levels. Only the origin (`scheme://host:port`) is kept; the full URL is
-  never stored.
-- `tab.title` and `tab.favIconUrl` — shown in the popup header so the user can
-  see which tab they're boosting.
-- `tabs.onActivated`, `tabs.onUpdated`, `tabs.onRemoved` — to disable boost
-  when the user switches away, re-apply after a reload, and clean up the
-  CORS tab set.
-- `tabs.sendMessage` — to talk to the content script.
-
-`activeTab` alone would not be enough because `tabs.onActivated` / `onUpdated`
-listeners and reading the URL of a tab that is *not* the one the popup was
-opened on (when disabling a previously boosted tab) need the `tabs`
-permission.
+- `tabs.query({ active: true, currentWindow: true })` — the popup finds the
+  tab it was opened on. No permission needed.
+- `tab.url`, `tab.title`, `tab.favIconUrl` — per MDN (`tabs.Tab`), present
+  with the `tabs` permission **or a matching host permission**, which
+  `<all_urls>` is for every web page. The URL gives the site origin for
+  per-site levels (only the origin, `scheme://host:port`, is kept; the full URL
+  is never stored); the title and icon are shown in the popup header.
+- `tabs.onUpdated`, `tabs.onRemoved` — re-apply boost and the badge after a
+  navigation, and clean up when a tab closes. The events fire without the
+  `tabs` permission; only the URL/title properties are gated.
+- `tabs.sendMessage` — to talk to the content script. No permission needed
+  beyond the content script being there.
+- `browserAction.setBadgeText` — the level on the toolbar icon. No permission
+  needed.
 
 ### `storage`
 
@@ -48,7 +44,7 @@ Four keys in `storage.local`:
 | Key | Type | Default |
 | --- | --- | --- |
 | `boostPercent` | number | 100 |
-| `maxBoostPercent` | number | 600 |
+| `maxBoostPercent` | number | 200 |
 | `perSite` | boolean | false |
 | `siteBoosts` | `{ [origin]: number }` | `{}` |
 
@@ -66,9 +62,10 @@ What the content script does **not** do:
 
 - It does not read page content, form data, or cookies.
 - It does not make network requests.
-- It does nothing at all until it receives an `applyBoost` message — no audio
-  graph is created and no scanning runs on pages where the user never enables
-  boost.
+- On a page where the user never enables boost it does one thing: when it
+  loads, it asks Volume Boost's own background page whether the tab is boosted
+  (`frameReady`, a message inside the browser). The answer is no, and nothing
+  else happens — no audio graph, no observer, no listeners on the page.
 
 ### `<all_urls>` — webRequest filter
 
@@ -94,8 +91,8 @@ function injectCorsHeaders(details) {
 
 - **Only `media` requests.** Documents, scripts, stylesheets, images, XHR,
   fetch, WebSocket, fonts — all untouched.
-- **Only tabs where boost has been enabled.** `corsTabs` is populated in
-  `setEnabled(true)` and emptied on tab close or on navigation while boost is
+- **Only tabs where boost has been enabled.** A tab is added to `corsTabs` in
+  `setEnabled(true)` and removed on tab close or on navigation while boost is
   off. Any other tab's media requests are returned unmodified.
 - **Listener only exists while needed.** `updateCorsListener()` adds the
   listener when `corsTabs` becomes non-empty and removes it when the set
@@ -136,6 +133,8 @@ nothing anywhere.
 
 ## Permissions not requested
 
+- `tabs`, `activeTab` — `<all_urls>` already gives what they would (see
+  above).
 - `tabCapture` — an alternative approach captures the tab's audio stream and
   re-plays it boosted. It's not available in Firefox in a usable form, and it
   doubles audio latency.

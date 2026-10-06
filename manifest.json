@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
   "name": "Volume Boost",
-  "version": "0.2.1",
-  "description": "Boosts the audio of the active tab with a safe limiter.",
+  "version": "1.0.0",
+  "description": "Boosts a tab's audio past 100% with a safe limiter.",
   "browser_specific_settings": {
     "gecko": {
       "id": "volume-boost@inklikeurine.dev",
@@ -18,8 +18,6 @@
     }
   },
   "permissions": [
-    "activeTab",
-    "tabs",
     "storage",
     "webRequest",
     "webRequestBlocking",

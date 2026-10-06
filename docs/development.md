@@ -48,8 +48,14 @@ the same page after edits.
 Handy console snippets in the **background** inspector:
 
 ```js
-// Current in-memory state
+// Settings in memory
 state
+
+// Which tabs are boosted, at what level
+[...boostedTabs]
+
+// Media attached / failed per tab and frame
+[...mediaCounts].map(([tab, frames]) => [tab, [...frames]])
 
 // Which tabs currently get the CORS header
 [...corsTabs]
@@ -89,62 +95,73 @@ mismatch.
 
 ## Manual test checklist
 
-There is no automated test suite — the behaviour depends on real media
-playback and browser audio routing. Run through this before every release.
+Automated checks — headless suites and a live check in a headless Firefox —
+live in the repository's private agent workspace. They can't hear anything
+and can't see the popup, so run through this before every release.
 
 ### Core
 
 - [ ] On a page with playing audio, enabling boost audibly increases volume.
 - [ ] Dragging the slider changes volume live, without clicks or dropouts.
-- [ ] Each preset (10 / 50 / 80 / 100 / 200 / MAX−20) sets the slider and the
-      audio level.
+- [ ] Each preset (10 / 50 / 80 / 100 / 120 / MAX) sets the slider and the
+      audio level; MAX sets the current maximum.
 - [ ] **Reset** returns to 100% and the audio matches un-boosted playback.
 - [ ] Disabling boost returns the audio to normal level.
-- [ ] Switching to another tab turns the boost off on the first tab (verify
-      audibly and by re-opening the popup on the first tab).
-- [ ] Reloading a boosted tab re-applies boost after the page finishes loading.
+- [ ] Switching to another tab and back leaves the first tab boosted (audibly,
+      and the popup on it still says Boost On).
+- [ ] Two tabs boosted at different levels each keep their own level.
+- [ ] The toolbar icon shows the level on a boosted tab and nothing on others.
+- [ ] Reloading a boosted tab keeps it boosted at the same level, badge
+      included.
 
 ### Settings
 
 - [ ] Slider value survives closing and reopening the popup.
 - [ ] Slider value, max, and per-site toggle survive a Firefox restart.
-- [ ] Double-clicking the max label and entering a value updates the slider
-      range and the MAX−20 preset; the value persists.
+- [ ] Double-clicking the max label opens a number field; Enter saves (slider
+      range and MAX follow, and the value persists), Esc cancels.
 - [ ] Entering a max below the current slider value clamps the slider.
-- [ ] Entering `0`, a negative number, or text shows "Max must be 1% or
-      higher" and leaves the max unchanged.
+- [ ] Entering `0`, `5000` or text shows "Max must be between 1% and 1000%"
+      and leaves the max unchanged.
 - [ ] With **Remember per-site** on, setting different levels on two sites and
       switching between them restores each site's level.
 - [ ] With per-site off, all sites share the global level.
+- [ ] **Forget saved sites**: the first click asks ("Forget N saved sites and
+      reset settings?"); a second click within four seconds resets the max to
+      200%, the level to 100% and per-site to off; waiting lets the question
+      lapse.
 
 ### UI
 
-- [ ] Popup renders at the correct size with no scrollbars.
+- [ ] Popup renders at the correct size with no scrollbars, also with a very
+      long tab title (cut with an ellipsis).
 - [ ] Popup follows the system light/dark theme (toggle the OS theme with the
       popup closed, reopen).
 - [ ] Tab title and favicon show in the header.
-- [ ] Warning text appears at ≥ 1000% and disappears below.
-- [ ] Status line reads "Boost On" / "Boost Off" and matches actual state.
+- [ ] Warning text appears at ≥ 300% and disappears below.
+- [ ] Status line reads "Boost On" / "Boost Off" and matches actual state;
+      "Boost On — no media found yet" on a page without media.
+- [ ] Keyboard only: Tab reaches the switch (focus ring visible), Space flips
+      it; Tab to **Max** and Enter opens the field.
 
 ### Edge cases
 
-- [ ] `about:addons`, `about:debugging`, `addons.mozilla.org`: enabling boost
-      shows an error in the status line and the toggle stays off.
+- [ ] `about:addons`, `addons.mozilla.org`: turning boost on says "Can't boost
+      this page. Try reloading it." and the toggle goes back off.
 - [ ] Cross-origin media (e.g. a `<video>` whose `src` is on a CDN): boost
       works, not silence. Check the network panel for
       `Access-Control-Allow-Origin: *` on the media response.
-- [ ] Media inside an iframe (e.g. an embedded player) is boosted.
+- [ ] Media inside an iframe (e.g. an embedded player) is boosted, including
+      a player the page loads after boost was turned on.
 - [ ] A page that creates its own `AudioContext` for its player (some
       web-based players do): the popup shows "Media on this page could not be
       boosted" rather than silently doing nothing.
 - [ ] Seeking in a boosted cross-origin video after boost is turned off
       continues to work (verifies the tab stays in `corsTabs`).
-- [ ] Opening the popup with no active tab (e.g. a new window with only the
-      popup) doesn't throw.
 
 ### Suggested test pages
 
-- YouTube — same-origin-ish media via MSE/blob; tests the `blob:` skip path.
+- YouTube — media via MSE/blob; tests the `blob:` skip path.
 - A direct `.mp4` / `.mp3` URL — simplest case, same-origin.
 - An HTML page you host that embeds a `<video src="https://other-origin/…">` —
   the core CORS case.

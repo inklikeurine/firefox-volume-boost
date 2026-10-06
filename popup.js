@@ -2,6 +2,10 @@
 
 const API = typeof browser !== "undefined" ? browser : chrome;
 
+const MAX_LIMIT = 1000;
+const WARN_AT = 300;
+const CONFIRM_MS = 4000;
+
 const elements = {
   app: document.getElementById("app"),
   favicon: document.getElementById("favicon"),
@@ -12,43 +16,36 @@ const elements = {
   readout: document.getElementById("readout"),
   resetBtn: document.getElementById("resetBtn"),
   maxLabel: document.getElementById("maxLabel"),
+  maxEditor: document.getElementById("maxEditor"),
+  maxInput: document.getElementById("maxInput"),
   presets: Array.from(document.querySelectorAll("[data-preset]")),
   perSiteToggle: document.getElementById("perSiteToggle"),
+  forgetBtn: document.getElementById("forgetBtn"),
   warning: document.getElementById("warning")
 };
 
+const tabState = {
+  enabled: false,
+  attached: 0,
+  failed: 0
+};
+
 let activeTabId = null;
-let maxBoostPercent = 600;
+let maxBoostPercent = 200;
+let savedSites = 0;
 let rafId = null;
 let pendingBoost = null;
+let forgetTimer = null;
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
 function sendMessage(message) {
-  try {
-    const result = API.runtime.sendMessage(message);
-    if (result && typeof result.then === "function") {
-      return result;
-    }
-  } catch (_err) {
-    // Fall through.
-  }
-
-  return new Promise((resolve) => {
-    API.runtime.sendMessage(message, (response) => resolve(response));
+  return API.runtime.sendMessage(message).catch((err) => {
+    console.warn("[volume-boost] no answer from the background", err && err.message ? err.message : err);
+    return null;
   });
-}
-
-function setSliderFill(value) {
-  const percent = maxBoostPercent ? (value / maxBoostPercent) * 100 : 0;
-  elements.boostSlider.style.background =
-    "linear-gradient(90deg, var(--accent) 0%, var(--accent) " +
-    percent +
-    "%, rgba(127, 127, 127, 0.3) " +
-    percent +
-    "%)";
 }
 
 function setReadout(value) {
@@ -56,17 +53,32 @@ function setReadout(value) {
 }
 
 function updateWarning(value) {
-  if (value >= 1000) {
-    elements.warning.classList.add("show");
-  } else {
-    elements.warning.classList.remove("show");
-  }
+  elements.warning.classList.toggle("show", value >= WARN_AT);
 }
 
-function setEnabledUI(enabled) {
-  elements.enabledToggle.checked = enabled;
-  elements.app.dataset.enabled = enabled ? "true" : "false";
-  elements.statusText.textContent = enabled ? "Boost On" : "Boost Off";
+function statusFor(state) {
+  if (!state.enabled) {
+    return "Boost Off";
+  }
+  if (state.attached > 0) {
+    return "Boost On";
+  }
+  if (state.failed > 0) {
+    return "Media on this page could not be boosted";
+  }
+  return "Boost On — no media found yet";
+}
+
+function renderStatus() {
+  elements.enabledToggle.checked = tabState.enabled;
+  elements.enabledToggle.disabled = activeTabId === null;
+  elements.app.dataset.enabled = tabState.enabled ? "true" : "false";
+  elements.statusText.textContent = statusFor(tabState);
+}
+
+// A one-off line in the status slot; the next renderStatus() replaces it.
+function showMessage(text) {
+  elements.statusText.textContent = text;
 }
 
 function updateMaxLabel() {
@@ -75,8 +87,8 @@ function updateMaxLabel() {
 }
 
 function resolvePresetValue(token) {
-  if (token === "max-20") {
-    return Math.max(0, maxBoostPercent - 20);
+  if (token === "max") {
+    return maxBoostPercent;
   }
   return Number(token) || 0;
 }
@@ -85,7 +97,6 @@ function setSliderValue(value) {
   const clamped = clamp(value, 0, maxBoostPercent);
   elements.boostSlider.value = String(clamped);
   setReadout(clamped);
-  setSliderFill(clamped);
   updateWarning(clamped);
   return clamped;
 }
@@ -106,6 +117,42 @@ function scheduleBoostUpdate(value) {
   });
 }
 
+async function refreshState() {
+  if (activeTabId === null) {
+    renderStatus();
+    return;
+  }
+
+  const state = await sendMessage({ type: "getState", tabId: activeTabId });
+  if (!state || state.ok === false) {
+    showMessage("Couldn't read Volume Boost's settings");
+    return;
+  }
+
+  maxBoostPercent = clamp(Number(state.maxBoostPercent) || 200, 1, MAX_LIMIT);
+  savedSites = Number(state.savedSites) || 0;
+  updateMaxLabel();
+  elements.perSiteToggle.checked = Boolean(state.perSite);
+  tabState.enabled = Boolean(state.enabled);
+  tabState.attached = Number(state.attached) || 0;
+  tabState.failed = Number(state.failed) || 0;
+  renderStatus();
+  setSliderValue(Number(state.boostPercent) || 0);
+}
+
+// Only the counts can change while the popup is open; don't touch the slider
+// the user may be dragging.
+async function refreshStatus() {
+  const state = await sendMessage({ type: "getState", tabId: activeTabId });
+  if (!state || state.ok === false) {
+    return;
+  }
+  tabState.enabled = Boolean(state.enabled);
+  tabState.attached = Number(state.attached) || 0;
+  tabState.failed = Number(state.failed) || 0;
+  renderStatus();
+}
+
 async function init() {
   const tabs = await API.tabs.query({ active: true, currentWindow: true });
   const tab = tabs && tabs[0] ? tabs[0] : null;
@@ -121,18 +168,66 @@ async function init() {
     elements.favicon.style.opacity = "0";
   }
 
-  if (activeTabId === null) {
-    setEnabledUI(false);
+  await refreshState();
+}
+
+function openMaxEditor() {
+  elements.maxInput.value = String(maxBoostPercent);
+  elements.maxLabel.hidden = true;
+  elements.maxEditor.hidden = false;
+  elements.maxInput.focus();
+  elements.maxInput.select();
+}
+
+function closeMaxEditor(returnFocus) {
+  if (elements.maxEditor.hidden) {
+    return;
+  }
+  elements.maxEditor.hidden = true;
+  elements.maxLabel.hidden = false;
+  if (returnFocus) {
+    elements.maxLabel.focus();
+  }
+}
+
+async function saveMax(value) {
+  const response = await sendMessage({ type: "setMaxBoost", value });
+  if (response && response.maxBoostPercent) {
+    maxBoostPercent = response.maxBoostPercent;
+  }
+  await refreshState();
+}
+
+function disarmForget() {
+  if (forgetTimer) {
+    clearTimeout(forgetTimer);
+    forgetTimer = null;
+  }
+  elements.forgetBtn.textContent = "Forget saved sites";
+}
+
+async function forgetSites() {
+  if (!forgetTimer) {
+    forgetTimer = setTimeout(() => {
+      disarmForget();
+      renderStatus();
+    }, CONFIRM_MS);
+    elements.forgetBtn.textContent = "Click again to confirm";
+    if (savedSites === 1) {
+      showMessage("Forget 1 saved site and reset settings?");
+    } else if (savedSites > 1) {
+      showMessage("Forget " + savedSites + " saved sites and reset settings?");
+    } else {
+      showMessage("Reset settings to defaults?");
+    }
     return;
   }
 
-  const state = await sendMessage({ type: "getState", tabId: activeTabId });
-  if (state) {
-    maxBoostPercent = clamp(state.maxBoostPercent || 600, 1, 5000);
-    updateMaxLabel();
-    elements.perSiteToggle.checked = Boolean(state.perSite);
-    setEnabledUI(Boolean(state.enabled));
-    setSliderValue(state.boostPercent || 0);
+  disarmForget();
+  const response = await sendMessage({ type: "resetSettings" });
+  await refreshState();
+  if (response && response.ok) {
+    showMessage("Settings reset");
   }
 }
 
@@ -140,7 +235,6 @@ function setupEvents() {
   elements.boostSlider.addEventListener("input", (event) => {
     const value = Number(event.target.value) || 0;
     setReadout(value);
-    setSliderFill(value);
     updateWarning(value);
     scheduleBoostUpdate(value);
   });
@@ -169,17 +263,14 @@ function setupEvents() {
       boostPercent: boostValue
     });
 
-    if (response && response.error) {
-      setEnabledUI(false);
-      elements.statusText.textContent = response.error;
+    if (!response || response.error) {
+      tabState.enabled = false;
+      renderStatus();
+      showMessage(response && response.error ? response.error : "No answer from Volume Boost");
       return;
     }
 
-    setEnabledUI(enabled);
-
-    if (response && response.warning) {
-      elements.statusText.textContent = response.warning;
-    }
+    await refreshStatus();
   });
 
   elements.perSiteToggle.addEventListener("change", async () => {
@@ -194,47 +285,62 @@ function setupEvents() {
     if (response && typeof response.perSite === "boolean") {
       elements.perSiteToggle.checked = response.perSite;
     }
+    await refreshState();
   });
 
-  elements.maxLabel.addEventListener("dblclick", async () => {
-    const input = window.prompt("Set max boost percentage", String(maxBoostPercent));
-    if (input === null) {
-      return;
-    }
-
-    const parsed = Math.round(Number(input));
-    if (!Number.isFinite(parsed) || parsed < 1) {
-      elements.statusText.textContent = "Max must be 1% or higher";
-      return;
-    }
-
-    maxBoostPercent = clamp(parsed, 1, 5000);
-    const response = await sendMessage({ type: "setMaxBoost", value: maxBoostPercent });
-    if (response && response.maxBoostPercent) {
-      maxBoostPercent = response.maxBoostPercent;
-    }
-
-    updateMaxLabel();
-    const current = Number(elements.boostSlider.value) || 0;
-    if (current > maxBoostPercent) {
-      const value = setSliderValue(maxBoostPercent);
-      scheduleBoostUpdate(value);
-    } else {
-      setSliderFill(current);
+  // Double-click opens the editor; so does Enter or Space (a keyboard
+  // "click" has detail 0), while a single mouse click does nothing.
+  elements.maxLabel.addEventListener("dblclick", openMaxEditor);
+  elements.maxLabel.addEventListener("click", (event) => {
+    if (event.detail === 0) {
+      openMaxEditor();
     }
   });
+
+  elements.maxEditor.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const parsed = Math.round(Number(elements.maxInput.value));
+    if (elements.maxInput.value.trim() === "" || !Number.isFinite(parsed) || parsed < 1 || parsed > MAX_LIMIT) {
+      showMessage("Max must be between 1% and " + MAX_LIMIT + "%");
+      elements.maxInput.select();
+      return;
+    }
+    closeMaxEditor(true);
+    await saveMax(parsed);
+  });
+
+  elements.maxInput.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMaxEditor(true);
+      renderStatus();
+    }
+  });
+
+  elements.maxInput.addEventListener("blur", () => closeMaxEditor(false));
 
   elements.presets.forEach((button) => {
     button.addEventListener("click", () => {
       const token = button.getAttribute("data-preset");
-      const value = resolvePresetValue(token);
-      const clamped = setSliderValue(value);
-      scheduleBoostUpdate(clamped);
+      const value = setSliderValue(resolvePresetValue(token));
+      scheduleBoostUpdate(value);
     });
+  });
+
+  elements.forgetBtn.addEventListener("click", forgetSites);
+
+  // The background announces when a frame of this tab finds or loses media.
+  // Other messages are the background's to answer.
+  API.runtime.onMessage.addListener((message) => {
+    if (message && message.type === "statusChanged") {
+      if (message.tabId === activeTabId) {
+        refreshStatus();
+      }
+      return Promise.resolve({ ok: true });
+    }
+    return undefined;
   });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  setupEvents();
-  init();
-});
+setupEvents();
+init();

@@ -1,25 +1,31 @@
 # Volume Boost
 
-A Firefox extension that boosts the audio of the active tab beyond 100%, with a
-built-in limiter to keep extreme boost levels from clipping into painful
-distortion.
+A Firefox extension that boosts a tab's audio beyond 100%, with a built-in
+limiter to keep extreme boost levels from clipping into painful distortion.
 
-**Version:** 0.2.1 · **Manifest:** v2 · **Minimum Firefox:** 140 (desktop) / 142 (Android)
+**Version:** 1.0.0 · **Manifest:** v2 · **Minimum Firefox:** 140 (desktop)
 
 ## What it does
 
-- Boosts audio on the **active tab only** — switching tabs turns the boost off
-  for the previous tab.
-- Horizontal slider from 0% up to a user-defined maximum (default 600%, hard
-  cap 5000%) with a live percentage readout.
-- One-click presets: 10%, 50%, 80%, 100%, 200%, and MAX−20.
+- Boosts audio in the tabs you choose. The boost **stays on in a tab until you
+  turn it off there** — switching tabs doesn't change it — and several tabs
+  can be boosted at once, each at its own level.
+- The toolbar icon shows the boost level (e.g. `150`) while the tab you're
+  looking at is boosted.
+- Horizontal slider from 0% up to a user-defined maximum (default 200%, hard
+  cap 1000%) with a live percentage readout.
+- One-click presets: 10%, 50%, 80%, 100%, 120%, and MAX.
 - **Reset** button returns the tab to 100%.
-- Optional **Remember per-site** mode that stores a separate boost level for
+- **Remember per-site** mode that stores a separate boost level for
   each site origin.
+- **Forget saved sites** clears every remembered level and puts the settings
+  back to their defaults.
 - A dynamics compressor acts as a safety limiter so high boost levels are loud
   rather than distorted.
-- Popup follows the system light/dark theme.
-- A warning appears in the popup when boost is set to 1000% or higher.
+- Popup follows the system light/dark theme and works from the keyboard.
+- A warning appears in the popup when boost is set to 300% or higher.
+- The popup says when boost is on but the page has no media yet, and when the
+  page's media could not be boosted.
 
 ## How it works (short version)
 
@@ -30,9 +36,9 @@ element on the page and routes it through the Web Audio API:
 <audio>/<video> ─▶ MediaElementSource ─▶ GainNode ─▶ DynamicsCompressor ─▶ speakers
 ```
 
-The gain node applies the boost; the compressor limits peaks. The content script
-re-scans the page once a second while boost is on, so media added later (e.g.
-an autoplaying next episode) gets picked up too.
+The gain node applies the boost; the compressor limits peaks. While boost is on
+the content script watches the page, so media added later (e.g. an autoplaying
+next episode, or an embedded player) gets picked up too.
 
 For the full explanation, see [docs/architecture.md](./docs/architecture.md).
 
@@ -75,11 +81,19 @@ Source: https://github.com/inklikeurine/firefox-extensions/tree/main/volume-boos
 3. Flip the toggle in the popup header to **Boost On**.
 4. Drag the slider, click a preset, or press **Reset** to return to 100%.
 
+The boost stays on in that tab, even while you use other tabs, until you open
+the popup there and flip the toggle off. To boost another tab as well, open
+the popup on it and turn it on there too.
+
+Everything in the popup works from the keyboard: Tab moves between the
+controls, Space flips the toggle, and the arrow keys move the slider.
+
 ### Changing the maximum
 
-Double-click the **Max 600%** label under the slider and enter a new value
-(1–5000). The slider range and the MAX−20 preset update immediately, and the
-setting persists.
+Double-click the **Max 200%** label under the slider and enter a new value
+(1–1000). The slider range and the MAX preset update immediately, and the
+setting persists. From the keyboard, Tab to the label and press Enter; then
+type the value and press Enter to save, or Esc to cancel.
 
 ### Per-site levels
 
@@ -88,13 +102,19 @@ against the current site's origin (e.g. `https://www.youtube.com`) and restored
 the next time you enable boost on that site. Sites without a saved value fall
 back to the global level.
 
+### Forgetting saved sites
+
+Click **Forget saved sites**, then click it again within a few seconds to
+confirm. Every per-site level is forgotten, and the maximum (200%), the boost
+level (100%) and **Remember per-site** (off) go back to their defaults. Tabs
+that are boosted stay on, at 100%.
+
 ## Permissions
 
 | Permission | Why it's needed |
 | --- | --- |
-| `activeTab`, `tabs` | Identify the active tab, read its URL for per-site settings, and show its title/favicon in the popup. |
 | `storage` | Persist boost level, maximum, per-site toggle, and per-site levels. |
-| `<all_urls>` (content script) | The content script must run on any page in order to find and boost its media elements. It runs in every frame (`all_frames: true`) because players are frequently embedded in iframes — a page's `<video>` is often inside a third-party player frame. |
+| `<all_urls>` | The content script must run on any page in order to find and boost its media elements. It runs in every frame (`all_frames: true`) because players are frequently embedded in iframes — a page's `<video>` is often inside a third-party player frame. The same access lets the popup show the tab's title and icon, and lets per-site mode read the tab's site. |
 | `webRequest`, `webRequestBlocking` | Adds `Access-Control-Allow-Origin: *` to **media** responses, and only for tabs where boost has been enabled. Without this, Web Audio outputs silence for cross-origin media (CDN-hosted video, for instance). |
 
 The CORS header injection is scoped as tightly as the API allows: it only
@@ -115,8 +135,12 @@ Firefox's local extension storage, and the manifest declares
   injected header (e.g. servers that reject the `Origin` header outright).
   The popup shows "Media on this page could not be boosted" when every element
   on the page failed to attach.
-- **Restricted pages** (`about:*`, `moz-extension:*`, addons.mozilla.org)
-  don't allow content scripts; enabling boost there shows an error.
+- **Restricted pages** (`about:*`, `moz-extension:*`, addons.mozilla.org,
+  the built-in PDF viewer) don't allow content scripts; turning boost on there
+  says "Can't boost this page. Try reloading it."
+- **Media the page never adds to the document** (created in a script and
+  played without being inserted), and players inside a shadow root, are not
+  found.
 - Boost is **per browser session** — reopening Firefox starts with boost off,
   though your slider value and settings are remembered.
 
@@ -129,8 +153,6 @@ Firefox's local extension storage, and the manifest declares
 | [docs/permissions.md](./docs/permissions.md) | Justification and scope of each permission |
 | [docs/development.md](./docs/development.md) | Local setup, manual test checklist, release process |
 | [docs/troubleshooting.md](./docs/troubleshooting.md) | Common problems and how to diagnose them |
-| [docs/learnings-reference-extension.md](./docs/learnings-reference-extension.md) | Notes from studying a comparable published extension |
-| [docs/learnings-firefox-popup.md](./docs/learnings-firefox-popup.md) | Firefox popup sizing/rendering gotchas |
 | [docs/spec.md](./docs/spec.md) | Product spec: goals, non-goals, functionality, settings, testing, release checklist |
 
 ## AI-generated
