@@ -1,6 +1,7 @@
 # Volume Boost — product spec
 
-**Status:** 1.0.1. Released in the repository; not signed or listed on AMO.
+**Status:** 1.0.1. Validated, Automated Test and Manual Review. Released in the
+repository; not signed or listed on AMO.
 
 ## About
 
