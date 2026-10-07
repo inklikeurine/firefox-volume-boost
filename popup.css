@@ -42,9 +42,9 @@ body {
     var(--bg);
   color: var(--text);
   width: 360px;
-  height: 316px;
+  height: 271px;
   min-width: 360px;
-  min-height: 316px;
+  min-height: 271px;
   overflow: hidden;
   display: block;
 }
@@ -220,7 +220,7 @@ input[type="number"]:focus-visible {
 .readout-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
 }
 
 .readout {
@@ -376,8 +376,13 @@ input[type="range"]:focus-visible::-moz-range-thumb {
   margin: 0;
 }
 
+/* Between the level and Reset, so it needs no row of its own. */
 .warning {
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
+  line-height: 1.25;
+  text-align: right;
   color: var(--warning);
   font-weight: 600;
   opacity: 0;

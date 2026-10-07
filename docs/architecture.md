@@ -23,6 +23,7 @@ and why the CORS header injection exists.
 | --- | --- | --- |
 | `background.js` | Persistent background page | Single source of truth for settings and for which tabs are boosted, at what level. Persists settings to `storage.local`. Totals the media each frame reports. Sets the toolbar badge. Owns the CORS header-injection listener. Reacts to tab navigation and close. **Why persistent, not an event page:** the boosted tabs, the per-frame media counts and the set of CORS-armed tabs are session state that cannot be rebuilt from storage, and the blocking `webRequest` listener must stay registered while any tab is armed. |
 | `content.js` | Every page and every frame (`<all_urls>`, `document_idle`, `all_frames`) | Builds the Web Audio graph, attaches media elements to it, applies gain, reports its counts. Stateless with respect to settings — it only knows what the background last told it. |
+| `lib/common.js` | Loaded first in all three | What they share: the `API` global, the 1000% cap (`MAX_PERCENT`), the default maximum (`DEFAULT_MAX_PERCENT`, 200), `clamp` and `warnOnce` (each problem logged once). Only `var` and function declarations, so a second load into the same content-script sandbox is harmless. |
 | `popup.js` / `popup.html` / `popup.css` | Browser-action popup | Renders the current tab's state, sends user intent to the background. Never talks to the content script directly. |
 
 The message protocol between these pieces is documented in
@@ -30,17 +31,20 @@ The message protocol between these pieces is documented in
 
 ## Audio graph (content script)
 
-On the first `applyBoost` with `enabled: true`, the content script lazily
-creates one `AudioContext` per frame and wires:
+When boost is on and the first media element of a frame attaches, the
+content script creates one `AudioContext` for that frame and wires:
 
 ```text
-GainNode ─▶ DynamicsCompressorNode ─▶ AudioContext.destination
+GainNode ─▶ GainNode (÷ 10) ─▶ WaveShaperNode (soft clipper) ─▶ AudioContext.destination
 ```
 
+A frame without media never creates a context, so a boosted tab does not open
+an audio stream in every ad or widget frame.
+
 Each `<audio>`/`<video>` element found in the frame is wrapped in a
-`MediaElementAudioSourceNode` and connected to the shared `GainNode`. The
-mapping element → source node is kept in a `WeakMap` so it is garbage-collected
-with the element and an element is never attached twice.
+`MediaElementAudioSourceNode` and connected to the shared `GainNode`. Attached
+and refused elements are kept in `WeakSet`s, so they are garbage-collected with
+the element and an element is never attached twice.
 
 The whole script runs inside a guard (`globalThis.volumeBoostLoaded`): content
 scripts of one extension share a sandbox per frame, so a second injection of
@@ -55,18 +59,36 @@ of what the background sends.
 
 ### Limiter
 
-The `DynamicsCompressorNode` is configured as a fast limiter:
+The safety stage is a soft clipper: a `WaveShaperNode` whose curve is linear
+up to 0.8 of full scale (`SOFT_KNEE`) and above it follows a `tanh` shoulder
+that leaves the knee at slope 1 and flattens out at full scale.
+Below the knee the boosted signal is untouched; only peaks are rounded off,
+and the output never passes full scale, so Firefox never hard-clips it.
 
-| Parameter | Value | Effect |
+A `WaveShaperNode` clamps its input to [−1, 1]. The curve therefore covers
+amplitudes up to 10 (`CURVE_RANGE`, the most 1000% can produce): a fixed
+`GainNode` scales the signal by 1/10 on the way in and the curve maps it back.
+The curve has 8193 points (odd, so 0 maps to exactly 0); the shaper runs
+without oversampling, whose resampling filters overshoot full scale.
+
+Measured in Firefox on speech-like audio peaking at −1 dBFS (as streaming
+audio does):
+
+| Level | Louder by | Distortion (error ÷ signal) |
 | --- | --- | --- |
-| threshold | −6 dB | Compression begins 6 dB below full scale |
-| knee | 0 | Hard knee — no compression below threshold |
-| ratio | 12:1 | Near-limiting |
-| attack | 3 ms | Catches transients quickly |
-| release | 250 ms | Avoids pumping on sustained loudness |
+| 100% | 0 dB | none |
+| 150% | +3.5 dB | −47 dB |
+| 200% | +6.0 dB | −32 dB |
+| 300% | +9.2 dB | −20 dB |
+| 600% | +13.3 dB | −11 dB |
 
-This keeps a few hundred percent of boost usable. It cannot make 1000% sound
-good; the popup warns at ≥300%.
+The popup warns from 300%, where the distortion becomes audible.
+
+A `DynamicsCompressorNode` is not used. On audio that already peaks near full
+scale, its gain reduction holds the level down long after each peak, so it
+takes back most of the boost: on the same signal, threshold −6 dB and ratio
+12:1 gave +2.4 dB at 200% and +4.4 dB at 1000%; with the threshold at −1 dB
+and ratio 20:1, 1000% gave +6.2 dB, what the soft clipper gives at 200%.
 
 ### Attach lifecycle
 
@@ -87,9 +109,24 @@ good; the popup warns at ≥300%.
 - **Skip rules.** Elements are skipped if they have no source yet
   (`src`, `currentSrc`, or `srcObject` all empty), if they are already
   attached, or if a previous attach attempt threw.
-- **Failure tracking.** `createMediaElementSource` throws if the element is
-  already connected to another `AudioContext` (some players create their own).
-  Such elements go into a `WeakSet` and are counted as failed.
+- **Failure tracking.** An element whose `createMediaElementSource` throws goes
+  into a `WeakSet` and is counted as failed. Firefox does not throw for an
+  element that another `AudioContext` already routes: it plays the element
+  through both. That is why an earlier copy's context is closed before an
+  element is attached (next item).
+- **Taking over from an earlier copy.** When Volume Boost is reloaded, updated
+  or re-enabled with a page open, Firefox discards the old content script but
+  not its `AudioContext`, which belongs to the page: it keeps playing the
+  element at the old level, and nothing can reach it. So on every attach the
+  content script also stores its context on the page's side of the element
+  (`element.wrappedJSObject.volumeBoostAudioContext`). The next copy looks
+  there before attaching an element, re-wraps what it finds with
+  `XPCNativeWrapper` (so only a real `AudioContext`'s own methods are used,
+  never anything the page put there) and closes it. On start-up it does this
+  for every media element that has a live earlier context and attaches the
+  element at 100%: closing the old context alone would leave the element
+  silent, because Firefox keeps its sound captured. The page can see and
+  close that property; closing it would only stop the boost.
 - **Reporting.** Whenever its attached/failed counts change, a frame sends
   `frameStatus` to the background. The background keeps the counts per frame
   (`sender.frameId`), so the popup shows a page's total across the page and
@@ -181,8 +218,10 @@ per-site entry that isn't a number is dropped.
 
 ### The level a tab gets
 
-When boost is switched on in a tab the popup sends the slider's value, which
-the popup took from `getState`:
+When boost is switched on in a tab the popup sends the slider's value (which
+it took from `getState`), and the background stores it as the last level set,
+and as the site's level in per-site mode. The value `getState` shows, and the
+one `setEnabled` uses when no level is sent:
 
 ```text
 tab boosted               → its level in boostedTabs
@@ -217,17 +256,11 @@ badge when the tab navigates to a new page, so it is set again on
 `status: "complete"`. Turning boost off sets the tab's badge to an empty
 string.
 
-### Update from 0.x
-
-Before 1.0 the default maximum was 600% and it was saved with every other
-setting. `runtime.onInstalled` with `reason: "update"` from a `0.x` version
-turns a stored `maxBoostPercent` of exactly 600 into the new default 200 and
-clamps the stored levels to it; any other stored maximum is kept (capped at
-1000).
-
 ## Popup
 
-The popup is a fixed 360×316 px layout. Firefox sizes a browser-action popup
+The popup is a fixed 360×271 px layout, sized to its content; the distortion
+warning sits in the readout row between the level and Reset, so it needs no
+row of its own. Firefox sizes a browser-action popup
 from the `<body>`'s layout, so `width`/`height` (and `min-` versions) are set on
 `body`, with `overflow: hidden`, and the `.app` grid has one
 `minmax(0, 1fr)` column so a long tab title is cut with an ellipsis instead of
@@ -244,8 +277,7 @@ coalesced with `requestAnimationFrame`, so at most one message per frame is sent
 while dragging. The slider's filled part is the `::-moz-range-progress`
 pseudo-element.
 
-Enabling boost from the popup is a two-step sequence: `setBoost` with the
-current slider value (so per-site storage is written), then `setEnabled`. If
+Enabling boost from the popup is one `setEnabled` with the slider's value. If
 the background reports an error the toggle is flipped back and the error text
 replaces the status line. While the popup is open, the background sends it
 `statusChanged` whenever a frame of a tab reports new counts; the popup

@@ -62,8 +62,10 @@ What the content script does **not** do:
 
 - It does not read page content, form data, or cookies.
 - It does not make network requests.
-- On a page where the user never enables boost it does one thing: when it
-  loads, it asks Volume Boost's own background page whether the tab is boosted
+- On a page where the user never enables boost it does two things when it
+  loads: it checks the page's media elements for an audio context left by an
+  earlier copy of Volume Boost (only the property Volume Boost itself sets),
+  and it asks Volume Boost's own background page whether the tab is boosted
   (`frameReady`, a message inside the browser). The answer is no, and nothing
   else happens — no audio graph, no observer, no listeners on the page.
 

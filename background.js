@@ -1,98 +1,22 @@
-/* global browser, chrome */
+/* global API, MAX_PERCENT, DEFAULT_MAX_PERCENT, clamp, warnOnce */
 
-const API = typeof browser !== "undefined" ? browser : chrome;
-
-const MAX_LIMIT = 1000;
 const BADGE_COLOR = "#1f7a75";
 const UNREACHABLE_PAGE = "Can't boost this page. Try reloading it.";
 
+// --- Settings (storage.local) ---------------------------------------------
+
 const DEFAULTS = {
   boostPercent: 100,
-  maxBoostPercent: 200,
+  maxBoostPercent: DEFAULT_MAX_PERCENT,
   perSite: false,
   siteBoosts: {}
 };
 
-const state = {
-  boostPercent: DEFAULTS.boostPercent,
-  maxBoostPercent: DEFAULTS.maxBoostPercent,
-  perSite: DEFAULTS.perSite,
-  siteBoosts: {}
-};
-
-// Session state, rebuilt from nothing on every start (boost is off after a
-// restart): the level applied to each boosted tab, and how many media
-// elements each frame of a tab has attached or failed to attach.
-const boostedTabs = new Map();
-const mediaCounts = new Map();
-
+const state = { ...DEFAULTS, siteBoosts: {} };
 let saveTimer = null;
-const warned = new Set();
-
-function warnOnce(key, message, err) {
-  if (warned.has(key)) {
-    return;
-  }
-  warned.add(key);
-  console.warn("[volume-boost] " + message, err && err.message ? err.message : err || "");
-}
-
-// Tabs whose media responses get an injected Access-Control-Allow-Origin header.
-// A tab is added when boost is enabled and stays until it closes or navigates
-// with boost off: once an element is crossorigin="anonymous" and routed through
-// Web Audio, later range requests without CORS headers would break playback.
-const corsTabs = new Set();
-
-const CORS_FILTER = { urls: ["<all_urls>"], types: ["media"] };
-
-function injectCorsHeaders(details) {
-  if (!corsTabs.has(details.tabId)) {
-    return {};
-  }
-  const headers = details.responseHeaders || [];
-  const existing = headers.find(
-    (header) => header.name.toLowerCase() === "access-control-allow-origin"
-  );
-  if (existing) {
-    existing.value = "*";
-  } else {
-    headers.push({ name: "Access-Control-Allow-Origin", value: "*" });
-  }
-  return { responseHeaders: headers };
-}
-
-function updateCorsListener() {
-  const registered = API.webRequest.onHeadersReceived.hasListener(injectCorsHeaders);
-  if (corsTabs.size > 0 && !registered) {
-    API.webRequest.onHeadersReceived.addListener(injectCorsHeaders, CORS_FILTER, [
-      "blocking",
-      "responseHeaders"
-    ]);
-  } else if (corsTabs.size === 0 && registered) {
-    API.webRequest.onHeadersReceived.removeListener(injectCorsHeaders);
-  }
-}
-
-function enableCorsForTab(tabId) {
-  corsTabs.add(tabId);
-  updateCorsListener();
-}
-
-function releaseCorsForTab(tabId) {
-  corsTabs.delete(tabId);
-  updateCorsListener();
-}
-
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
 
 function readNumber(value, fallback) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function isHttpUrl(url) {
-  return Boolean(url) && (url.startsWith("http://") || url.startsWith("https://"));
 }
 
 function clampSiteBoosts(siteBoosts, max) {
@@ -108,6 +32,7 @@ function clampSiteBoosts(siteBoosts, max) {
   return result;
 }
 
+// Defaults are applied on read; anything missing or malformed falls back.
 async function loadSettings() {
   let data = DEFAULTS;
   try {
@@ -115,23 +40,19 @@ async function loadSettings() {
   } catch (err) {
     warnOnce("load", "could not read settings; using defaults", err);
   }
-  state.maxBoostPercent = clamp(
-    Math.round(readNumber(data.maxBoostPercent, DEFAULTS.maxBoostPercent)),
-    1,
-    MAX_LIMIT
-  );
-  state.boostPercent = clamp(
-    readNumber(data.boostPercent, DEFAULTS.boostPercent),
-    0,
-    state.maxBoostPercent
-  );
+  state.maxBoostPercent = clamp(Math.round(readNumber(data.maxBoostPercent, DEFAULT_MAX_PERCENT)), 1, MAX_PERCENT);
+  state.boostPercent = clamp(readNumber(data.boostPercent, DEFAULTS.boostPercent), 0, state.maxBoostPercent);
   state.perSite = Boolean(data.perSite);
   state.siteBoosts = clampSiteBoosts(data.siteBoosts, state.maxBoostPercent);
 }
 
 const settingsLoaded = loadSettings();
 
-async function saveSettings() {
+async function saveNow() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
   try {
     await API.storage.local.set({
       boostPercent: state.boostPercent,
@@ -144,23 +65,21 @@ async function saveSettings() {
   }
 }
 
+// The slider sends a stream of levels; save once it settles.
 function scheduleSave() {
   if (saveTimer) {
     clearTimeout(saveTimer);
   }
-  saveTimer = setTimeout(() => {
-    saveTimer = null;
-    saveSettings();
-  }, 200);
+  saveTimer = setTimeout(saveNow, 200);
 }
 
-async function saveNow() {
-  if (saveTimer) {
-    clearTimeout(saveTimer);
-    saveTimer = null;
-  }
-  await saveSettings();
-}
+// --- Tabs and levels ---------------------------------------------------------
+
+// Session state, rebuilt from nothing on every start (boost is off after a
+// restart): the level applied to each boosted tab, and how many media
+// elements each frame of a tab has attached or failed to attach.
+const boostedTabs = new Map();
+const mediaCounts = new Map();
 
 async function getTab(tabId) {
   try {
@@ -173,7 +92,7 @@ async function getTab(tabId) {
 
 async function getTabOrigin(tabId) {
   const tab = await getTab(tabId);
-  if (!tab || !isHttpUrl(tab.url)) {
+  if (!tab || !tab.url || !/^https?:\/\//.test(tab.url)) {
     return null;
   }
   try {
@@ -201,15 +120,27 @@ async function getBoostForTab(tabId) {
   return siteBoost === null ? state.boostPercent : siteBoost;
 }
 
+// The level the user just chose becomes the last level set, and the site's
+// level in per-site mode.
+async function storeLevel(tabId, value) {
+  const level = clamp(Math.round(Number(value)) || 0, 0, state.maxBoostPercent);
+  state.boostPercent = level;
+  if (state.perSite) {
+    const origin = await getTabOrigin(tabId);
+    if (origin) {
+      state.siteBoosts[origin] = level;
+    }
+  }
+  scheduleSave();
+  return level;
+}
+
 function mediaTotals(tabId) {
   const totals = { attached: 0, failed: 0 };
-  const frames = mediaCounts.get(tabId);
-  if (frames) {
-    frames.forEach((counts) => {
-      totals.attached += counts.attached;
-      totals.failed += counts.failed;
-    });
-  }
+  (mediaCounts.get(tabId) || new Map()).forEach((counts) => {
+    totals.attached += counts.attached;
+    totals.failed += counts.failed;
+  });
   return totals;
 }
 
@@ -226,21 +157,63 @@ function notifyPopup(tabId) {
   API.runtime.sendMessage({ type: "statusChanged", tabId }).catch(() => {});
 }
 
+// Every frame of the tab gets it; the promise rejects when no content script
+// answers (a page Firefox doesn't let add-ons into).
 function applyToTab(tabId, enabled, boostPercent) {
-  return API.tabs.sendMessage(tabId, {
-    type: "applyBoost",
-    enabled: Boolean(enabled),
-    boostPercent: clamp(Number(boostPercent) || 0, 0, state.maxBoostPercent)
-  });
+  return API.tabs.sendMessage(tabId, { type: "applyBoost", enabled, boostPercent });
 }
 
 function boostTab(tabId, percent) {
   boostedTabs.set(tabId, percent);
   showBadge(tabId);
-  return applyToTab(tabId, true, percent).catch((err) =>
-    warnOnce("apply", "could not reach a boosted tab", err)
-  );
+  return applyToTab(tabId, true, percent).catch((err) => warnOnce("apply", "could not reach a boosted tab", err));
 }
+
+// --- CORS header injection ------------------------------------------------------
+// Tabs whose media responses get an injected Access-Control-Allow-Origin
+// header, without which Web Audio outputs silence for cross-origin media. A tab
+// is added when boost is enabled and stays until it closes or navigates with
+// boost off: once an element is crossorigin="anonymous" and routed through Web
+// Audio, later range requests without CORS headers would break playback.
+
+const corsTabs = new Set();
+const CORS_FILTER = { urls: ["<all_urls>"], types: ["media"] };
+
+function injectCorsHeaders(details) {
+  if (!corsTabs.has(details.tabId)) {
+    return {};
+  }
+  const headers = details.responseHeaders || [];
+  const existing = headers.find((header) => header.name.toLowerCase() === "access-control-allow-origin");
+  if (existing) {
+    existing.value = "*";
+  } else {
+    headers.push({ name: "Access-Control-Allow-Origin", value: "*" });
+  }
+  return { responseHeaders: headers };
+}
+
+// The listener is registered only while some tab needs it.
+function updateCorsListener() {
+  const registered = API.webRequest.onHeadersReceived.hasListener(injectCorsHeaders);
+  if (corsTabs.size > 0 && !registered) {
+    API.webRequest.onHeadersReceived.addListener(injectCorsHeaders, CORS_FILTER, ["blocking", "responseHeaders"]);
+  } else if (corsTabs.size === 0 && registered) {
+    API.webRequest.onHeadersReceived.removeListener(injectCorsHeaders);
+  }
+}
+
+function armCors(tabId) {
+  corsTabs.add(tabId);
+  updateCorsListener();
+}
+
+function releaseCors(tabId) {
+  corsTabs.delete(tabId);
+  updateCorsListener();
+}
+
+// --- Messages from the popup ------------------------------------------------------
 
 async function handleGetState(tabId) {
   await settingsLoaded;
@@ -259,71 +232,45 @@ async function handleGetState(tabId) {
 
 async function handleSetBoost(tabId, value) {
   await settingsLoaded;
-  const clamped = clamp(Math.round(Number(value)) || 0, 0, state.maxBoostPercent);
-  state.boostPercent = clamped;
-
-  if (state.perSite) {
-    const origin = await getTabOrigin(tabId);
-    if (origin) {
-      state.siteBoosts[origin] = clamped;
-    }
-  }
-
-  scheduleSave();
-
+  const level = await storeLevel(tabId, value);
   if (boostedTabs.has(tabId)) {
-    await boostTab(tabId, clamped);
+    await boostTab(tabId, level);
   }
-
-  return { boostPercent: clamped };
+  return { boostPercent: level };
 }
 
 async function handleSetMaxBoost(value) {
   await settingsLoaded;
   const requested = Math.round(Number(value));
-  const maxBoost =
-    Number.isFinite(requested) && requested >= 1 ? Math.min(requested, MAX_LIMIT) : DEFAULTS.maxBoostPercent;
-  state.maxBoostPercent = maxBoost;
-  state.boostPercent = clamp(state.boostPercent, 0, maxBoost);
-  state.siteBoosts = clampSiteBoosts(state.siteBoosts, maxBoost);
-
+  const max = Number.isFinite(requested) && requested >= 1 ? Math.min(requested, MAX_PERCENT) : DEFAULT_MAX_PERCENT;
+  state.maxBoostPercent = max;
+  state.boostPercent = clamp(state.boostPercent, 0, max);
+  state.siteBoosts = clampSiteBoosts(state.siteBoosts, max);
   scheduleSave();
-
-  await Promise.all(
-    Array.from(boostedTabs, ([tabId, percent]) => boostTab(tabId, clamp(percent, 0, maxBoost)))
-  );
-
-  return { maxBoostPercent: maxBoost };
+  await Promise.all(Array.from(boostedTabs, ([tabId, percent]) => boostTab(tabId, clamp(percent, 0, max))));
+  return { maxBoostPercent: max };
 }
 
 async function handleSetPerSite(tabId, value) {
   await settingsLoaded;
   state.perSite = Boolean(value);
-
   if (state.perSite) {
     const origin = await getTabOrigin(tabId);
     if (origin) {
       state.siteBoosts[origin] = state.boostPercent;
     }
   }
-
   scheduleSave();
-
   return { perSite: state.perSite };
 }
 
 async function handleResetSettings() {
   await settingsLoaded;
   const forgotten = Object.keys(state.siteBoosts).length;
-  state.boostPercent = DEFAULTS.boostPercent;
-  state.maxBoostPercent = DEFAULTS.maxBoostPercent;
-  state.perSite = DEFAULTS.perSite;
-  state.siteBoosts = {};
+  Object.assign(state, DEFAULTS, { siteBoosts: {} });
   await saveNow();
-
   // Boosted tabs stay on, at the default level.
   await Promise.all(Array.from(boostedTabs.keys(), (tabId) => boostTab(tabId, state.boostPercent)));
-
   return {
     ok: true,
     forgotten,
@@ -333,53 +280,50 @@ async function handleResetSettings() {
   };
 }
 
+// Switching on with a level stores it as setBoost does; without one the tab
+// gets its site's or the last level.
 async function handleSetEnabled(tabId, enabled, boostPercent) {
   await settingsLoaded;
 
-  if (enabled) {
-    const percent =
-      typeof boostPercent === "number" && Number.isFinite(boostPercent)
-        ? clamp(Math.round(boostPercent), 0, state.maxBoostPercent)
-        : await getBoostForTab(tabId);
-    const wasBoosted = boostedTabs.has(tabId);
-    const wasCorsTab = corsTabs.has(tabId);
-    boostedTabs.set(tabId, percent);
-    enableCorsForTab(tabId);
-    try {
-      await applyToTab(tabId, true, percent);
-    } catch (err) {
-      warnOnce("enable", "could not reach the page to boost it", err);
-      if (!wasBoosted) {
-        boostedTabs.delete(tabId);
-      }
-      if (!wasCorsTab) {
-        releaseCorsForTab(tabId);
-      }
-      showBadge(tabId);
-      return { enabled: false, error: UNREACHABLE_PAGE };
+  if (!enabled) {
+    boostedTabs.delete(tabId);
+    showBadge(tabId);
+    await applyToTab(tabId, false, 100).catch((err) =>
+      warnOnce("disable", "could not reach the page to stop boosting it", err)
+    );
+    return { enabled: false };
+  }
+
+  const percent =
+    typeof boostPercent === "number" && Number.isFinite(boostPercent)
+      ? await storeLevel(tabId, boostPercent)
+      : await getBoostForTab(tabId);
+  const wasBoosted = boostedTabs.has(tabId);
+  const wasArmed = corsTabs.has(tabId);
+  boostedTabs.set(tabId, percent);
+  armCors(tabId);
+  try {
+    await applyToTab(tabId, true, percent);
+  } catch (err) {
+    warnOnce("enable", "could not reach the page to boost it", err);
+    if (!wasBoosted) {
+      boostedTabs.delete(tabId);
+    }
+    if (!wasArmed) {
+      releaseCors(tabId);
     }
     showBadge(tabId);
-    return { enabled: true };
+    return { enabled: false, error: UNREACHABLE_PAGE };
   }
-
-  boostedTabs.delete(tabId);
   showBadge(tabId);
-
-  try {
-    await applyToTab(tabId, false, 100);
-  } catch (err) {
-    warnOnce("disable", "could not reach the page to stop boosting it", err);
-  }
-
-  return { enabled: false };
+  return { enabled: true };
 }
+
+// --- Messages from content scripts --------------------------------------------------
 
 // A content script just loaded in some frame: tell it whether its tab is boosted.
 function handleFrameReady(tabId) {
-  if (boostedTabs.has(tabId)) {
-    return { enabled: true, boostPercent: boostedTabs.get(tabId) };
-  }
-  return { enabled: false };
+  return boostedTabs.has(tabId) ? { enabled: true, boostPercent: boostedTabs.get(tabId) } : { enabled: false };
 }
 
 function handleFrameStatus(tabId, frameId, attached, failed) {
@@ -394,48 +338,41 @@ function handleFrameStatus(tabId, frameId, attached, failed) {
   return { ok: true };
 }
 
-API.runtime.onMessage.addListener((message, sender, sendResponse) => {
+function handleMessage(message, sender) {
   const senderTabId = sender && sender.tab ? sender.tab.id : null;
-  const handler = async () => {
-    if (!message || !message.type) {
-      return { ok: false, error: "Invalid message" };
-    }
+  switch (message.type) {
+    case "getState":
+      return handleGetState(message.tabId);
+    case "setBoost":
+      return handleSetBoost(message.tabId, message.value);
+    case "setMaxBoost":
+      return handleSetMaxBoost(message.value);
+    case "setPerSite":
+      return handleSetPerSite(message.tabId, message.value);
+    case "setEnabled":
+      return handleSetEnabled(message.tabId, message.value, message.boostPercent);
+    case "resetSettings":
+      return handleResetSettings();
+    case "frameReady":
+      return senderTabId === null ? { enabled: false } : handleFrameReady(senderTabId);
+    case "frameStatus":
+      return senderTabId === null
+        ? { ok: false, error: "Not sent from a tab" }
+        : handleFrameStatus(senderTabId, sender.frameId || 0, message.attached, message.failed);
+    default:
+      return { ok: false, error: "Unknown message" };
+  }
+}
 
-    switch (message.type) {
-      case "getState":
-        return handleGetState(message.tabId);
-      case "setBoost":
-        return handleSetBoost(message.tabId, message.value);
-      case "setMaxBoost":
-        return handleSetMaxBoost(message.value);
-      case "setPerSite":
-        return handleSetPerSite(message.tabId, message.value);
-      case "setEnabled":
-        return handleSetEnabled(message.tabId, message.value, message.boostPercent);
-      case "reset":
-        return handleSetBoost(message.tabId, 100);
-      case "resetSettings":
-        return handleResetSettings();
-      case "frameReady":
-        return senderTabId === null ? { enabled: false } : handleFrameReady(senderTabId);
-      case "frameStatus":
-        if (senderTabId === null) {
-          return { ok: false, error: "Not sent from a tab" };
-        }
-        return handleFrameStatus(senderTabId, sender.frameId || 0, message.attached, message.failed);
-      default:
-        return { ok: false, error: "Unknown message" };
-    }
-  };
-
-  handler()
-    .then((result) => sendResponse(result))
-    .catch((err) =>
-      sendResponse({ ok: false, error: err && err.message ? err.message : "Error" })
-    );
-
+// Every message is answered, even a malformed one.
+API.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  Promise.resolve()
+    .then(() => (message && message.type ? handleMessage(message, sender) : { ok: false, error: "Invalid message" }))
+    .then(sendResponse, (err) => sendResponse({ ok: false, error: err && err.message ? err.message : "Error" }));
   return true;
 });
+
+// --- Tab lifecycle -------------------------------------------------------------------
 
 API.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === "loading") {
@@ -444,7 +381,7 @@ API.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (!boostedTabs.has(tabId)) {
       // Navigation discards the old page's tainted media elements, so the
       // header injection is no longer needed for tabs without active boost.
-      releaseCorsForTab(tabId);
+      releaseCors(tabId);
     }
   }
   if (changeInfo.status === "complete" && boostedTabs.has(tabId)) {
@@ -459,33 +396,7 @@ API.tabs.onUpdated.addListener((tabId, changeInfo) => {
 API.tabs.onRemoved.addListener((tabId) => {
   boostedTabs.delete(tabId);
   mediaCounts.delete(tabId);
-  releaseCorsForTab(tabId);
-});
-
-// Before 1.0 the default maximum was 600%, and it was saved with every other
-// setting, so a stored 600 is almost always that old default.
-async function migrateFromBeta() {
-  await settingsLoaded;
-  let stored = {};
-  try {
-    stored = await API.storage.local.get("maxBoostPercent");
-  } catch (err) {
-    warnOnce("migrate", "could not read settings to update them", err);
-    return;
-  }
-  if (stored.maxBoostPercent === 600) {
-    state.maxBoostPercent = DEFAULTS.maxBoostPercent;
-    state.boostPercent = clamp(state.boostPercent, 0, state.maxBoostPercent);
-    state.siteBoosts = clampSiteBoosts(state.siteBoosts, state.maxBoostPercent);
-  }
-  await saveNow();
-}
-
-API.runtime.onInstalled.addListener((details) => {
-  const previousMajor = parseInt(String(details.previousVersion || ""), 10);
-  if (details.reason === "update" && previousMajor === 0) {
-    migrateFromBeta();
-  }
+  releaseCors(tabId);
 });
 
 API.browserAction

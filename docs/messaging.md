@@ -57,16 +57,6 @@ tabs keep their levels.
 In per-site mode this also writes `siteBoosts[origin] = value` for the tab's
 origin (HTTP/HTTPS only).
 
-### `reset`
-
-Alias for `setBoost` with `value: 100`. The popup calls `setBoost` directly
-for its Reset button.
-
-```js
-{ type: "reset", tabId }
-// response: same as setBoost
-```
-
 ### `setMaxBoost`
 
 Change the slider ceiling. Clamps the global level, every stored per-site
@@ -118,8 +108,10 @@ another.
 { type: "setEnabled", tabId, value: boolean, boostPercent?: number }
 ```
 
-`boostPercent` is optional; if omitted the background resolves it via the
-per-site logic.
+With `boostPercent`, switching on also stores that level exactly as `setBoost`
+does (the last level set, and the site's level in per-site mode). Without
+it, the tab gets its site's level in per-site mode, otherwise the last level
+set.
 
 Possible responses:
 
@@ -196,19 +188,18 @@ content script's state untouched.
 { type: "applyBoost", enabled?: boolean, boostPercent?: number }
 
 // response (the first frame to answer)
-{
-  ok: true,
-  enabled: boolean,
-  boostPercent: number,     // clamped to 0..1000
-  attached: number,         // this frame's elements routed through Web Audio
-  failed: number            // this frame's elements that threw on attach
-}
+{ ok: true }
 ```
+
+The background only needs to know that some frame answered; each frame's
+media counts arrive separately as `frameStatus`. The level is clamped to
+0–1000 in the content script.
 
 Behaviour on receipt:
 
-- `enabled: true` → build the audio graph if needed, set gain, attach the
-  frame's media, start watching for more (`MutationObserver` plus capture-phase
+- `enabled: true` → set gain, attach the frame's media (the audio graph is
+  built when the first element attaches; a frame without media has none),
+  start watching for more (`MutationObserver` plus capture-phase
   `loadstart`/`play` listeners), report counts if they changed.
 - `enabled: false` → set gain to 1.0, stop watching. Graph and existing source
   nodes are retained (see [architecture.md](./architecture.md#attach-lifecycle)).
@@ -217,36 +208,22 @@ The background sends `applyBoost { enabled: false, boostPercent: 100 }` when
 disabling; the content script ignores the percent in that case since gain is
 forced to 100 anyway.
 
-### `getState` (content script)
-
-Diagnostic query, used by the live test harness; not used by the popup.
-
-```js
-// request
-{ type: "getState" }
-
-// response: identical shape to the applyBoost response
-```
-
 ## Sequence: enabling boost from the popup
 
 ```text
 Popup                       Background                        Content script (each frame)
   │                              │                                   │
-  │ setBoost {value: 150}        │                                   │
+  │ setEnabled {value: true,     │                                   │
+  │             boostPercent:150}│                                   │
   │─────────────────────────────▶│ state.boostPercent = 150          │
   │                              │ siteBoosts[origin] = 150 (if perSite)
   │                              │ scheduleSave()                    │
-  │◀─────────────────────────────│ {boostPercent: 150}               │
-  │                              │                                   │
-  │ setEnabled {value: true,     │                                   │
-  │             boostPercent:150}│                                   │
-  │─────────────────────────────▶│ boostedTabs.set(tab, 150)         │
+  │                              │ boostedTabs.set(tab, 150)         │
   │                              │ corsTabs.add(tab)                 │
   │                              │ applyBoost {enabled:true, 150}    │
-  │                              │──────────────────────────────────▶│ ensureAudioGraph(), setGain(150)
-  │                              │                                   │ attach media, start watching
-  │                              │◀──────────────────────────────────│ {ok, attached, failed}
+  │                              │──────────────────────────────────▶│ setGain(150), attach media
+  │                              │                                   │ (graph built on first attach), start watching
+  │                              │◀──────────────────────────────────│ {ok: true}
   │                              │ badge "150"                       │
   │◀─────────────────────────────│ {enabled: true}                   │
   │ getState → status line       │                                   │
@@ -262,7 +239,7 @@ Content script (new frame)        Background
   │ frameReady                         │
   │───────────────────────────────────▶│ boostedTabs.has(sender.tab.id)?
   │◀───────────────────────────────────│ {enabled: true, boostPercent: 150}
-  │ applyState(): graph, gain, attach  │
+  │ applyState(): gain, attach (graph) │
   │ frameStatus {attached, failed}     │
   │───────────────────────────────────▶│ mediaCounts[tab][frameId] = …
 ```

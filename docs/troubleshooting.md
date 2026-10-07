@@ -4,6 +4,11 @@ Symptoms first, then likely causes and how to confirm each.
 
 ## Boost is on but nothing sounds louder
 
+**The level is only a little above 100%.**
+Loudness is heard in decibels: 120% is +1.6 dB, which is hard to notice;
+150% is +3.5 dB, 200% +6 dB (clearly louder), 300% about +9 dB. Try 200%
+before concluding it doesn't work.
+
 **The tab is muted, or the page's own volume is at zero.**
 Boost multiplies whatever the page outputs. Check the tab's mute icon and the
 player's volume control.
@@ -16,9 +21,18 @@ the cause. If you hear silence, see the next section.
 **The media element couldn't be attached.**
 Open the popup: if the status line says *"Media on this page could not be
 boosted"*, every element on the page and its embedded frames threw on
-`createMediaElementSource`. The usual reason is that the page's player already
-routes the element through its own `AudioContext` — an element can only belong
-to one. There is no fix from our side; the page's player owns the audio.
+`createMediaElementSource`. There is no fix from our side; the browser console
+has a `[volume-boost]` warning with the reason.
+
+**The page's own player also routes the element through Web Audio.**
+Firefox lets one element feed several `AudioContext`s, so the page's copy of
+the sound keeps playing at its own level and the boost only changes Volume
+Boost's copy: the volume changes less than the slider says. Volume Boost
+can't reach the page's context.
+
+**A page left over from before Volume Boost was restarted.**
+After Volume Boost is reloaded or updated, it takes over media that its earlier
+copy was boosting, at 100%. If a page still behaves oddly, reload the page.
 
 **The media element hasn't been found.**
 If the status line says *"Boost On — no media found yet"*, no frame of the page
@@ -106,9 +120,10 @@ look. Details in [architecture.md](./architecture.md#popup).
 
 ## Distortion at high boost
 
-The limiter (12:1 above −6 dB) keeps things listenable up to a few hundred
-percent. Beyond that you're asking a compressor to absorb a lot of gain and it
-will pump and crunch; the popup warns from 300%. If you need much more, the
+The soft limiter only touches peaks, so up to about 200% it is hard to hear
+on most audio. From about 300% (where the popup warns) more and more of the
+sound is being rounded off and it starts to crunch; at 600% and above it is
+heavily distorted. If you need much more, the
 source is probably broken (badly mastered, wrong channel) and a lower value
 plus system volume will sound better.
 

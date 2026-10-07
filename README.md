@@ -3,7 +3,7 @@
 A Firefox extension that boosts a tab's audio beyond 100%, with a built-in
 limiter to keep extreme boost levels from clipping into painful distortion.
 
-**Version:** 1.0.0 · **Manifest:** v2 · **Minimum Firefox:** 140 (desktop)
+**Version:** 1.0.1 · **Manifest:** v2 · **Minimum Firefox:** 140 (desktop)
 
 ## What it does
 
@@ -20,10 +20,11 @@ limiter to keep extreme boost levels from clipping into painful distortion.
   each site origin.
 - **Forget saved sites** clears every remembered level and puts the settings
   back to their defaults.
-- A dynamics compressor acts as a safety limiter so high boost levels are loud
-  rather than distorted.
+- A soft limiter rounds off the loudest peaks instead of letting them clip, so
+  the sound is unchanged below its peaks and high boost levels stay loud
+  without harsh crackle.
 - Popup follows the system light/dark theme and works from the keyboard.
-- A warning appears in the popup when boost is set to 300% or higher.
+- A warning appears next to the level when boost is set to 300% or higher.
 - The popup says when boost is on but the page has no media yet, and when the
   page's media could not be boosted.
 
@@ -33,10 +34,11 @@ When you enable boost, a content script finds every `<audio>` and `<video>`
 element on the page and routes it through the Web Audio API:
 
 ```
-<audio>/<video> ─▶ MediaElementSource ─▶ GainNode ─▶ DynamicsCompressor ─▶ speakers
+<audio>/<video> ─▶ MediaElementSource ─▶ GainNode ─▶ soft clipper (WaveShaper) ─▶ speakers
 ```
 
-The gain node applies the boost; the compressor limits peaks. While boost is on
+The gain node applies the boost; the soft clipper rounds off peaks that would
+go past full scale. While boost is on
 the content script watches the page, so media added later (e.g. an autoplaying
 next episode, or an embedded player) gets picked up too.
 

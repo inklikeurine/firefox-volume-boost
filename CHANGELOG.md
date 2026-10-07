@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.0.1] — 2026-10-06
+
+### Fixed
+
+- Boosting made little or no audible difference on YouTube and other
+  streaming sites: the limiter took back most of the boost on audio that is
+  already mastered close to full scale (200% came out only about 2 dB louder
+  than 100%). The limiter is now a soft clipper that leaves the sound
+  untouched below its peaks and rounds the peaks off instead of clipping
+  them, so 200% is +6 dB and 300% about +9 dB. 100% is now exactly the
+  original volume (the old limiter changed it slightly even at 100%).
+- After Volume Boost was reloaded, updated or re-enabled with a boosted video
+  open, that video stayed at the old level for good: the earlier copy's
+  audio routing kept playing it out of reach, so the slider seemed to do
+  nothing, and switching boost on again played the sound twice. The new copy
+  now takes such media over (at 100% until boost is switched on) and closes
+  the old routing.
+- A boosted tab no longer opens an audio stream in every embedded frame (ads,
+  sign-in widgets); only frames that have media do.
+
+### Changed
+
+- The popup is shorter: the empty space under **Forget saved sites** is gone.
+  The distortion warning now appears next to the level instead of in a row
+  of its own.
+- Code reorganised: what the background, popup and content script share is
+  in `lib/common.js`; switching boost on is one message instead of two. No
+  behaviour change.
+
+### Removed
+
+- The update step from 0.x that turned a saved maximum of exactly 600% into
+  200%. No installation can still need it: temporary installs lose their
+  settings when Firefox restarts.
+
 ## [1.0.0] — 2026-10-05
 
 ### Added

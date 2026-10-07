@@ -1,8 +1,5 @@
-/* global browser, chrome */
+/* global API, MAX_PERCENT, DEFAULT_MAX_PERCENT, clamp */
 
-const API = typeof browser !== "undefined" ? browser : chrome;
-
-const MAX_LIMIT = 1000;
 const WARN_AT = 300;
 const CONFIRM_MS = 4000;
 
@@ -31,15 +28,11 @@ const tabState = {
 };
 
 let activeTabId = null;
-let maxBoostPercent = 200;
+let maxBoostPercent = DEFAULT_MAX_PERCENT;
 let savedSites = 0;
 let rafId = null;
 let pendingBoost = null;
 let forgetTimer = null;
-
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
 
 function sendMessage(message) {
   return API.runtime.sendMessage(message).catch((err) => {
@@ -117,7 +110,10 @@ function scheduleBoostUpdate(value) {
   });
 }
 
-async function refreshState() {
+// Repaint from the background's state. With `statusOnly`, just the switch
+// and the status line: only the counts change while the popup is open, and
+// the slider may be mid-drag.
+async function refresh({ statusOnly = false } = {}) {
   if (activeTabId === null) {
     renderStatus();
     return;
@@ -125,32 +121,24 @@ async function refreshState() {
 
   const state = await sendMessage({ type: "getState", tabId: activeTabId });
   if (!state || state.ok === false) {
-    showMessage("Couldn't read Volume Boost's settings");
+    if (!statusOnly) {
+      showMessage("Couldn't read Volume Boost's settings");
+    }
     return;
   }
 
-  maxBoostPercent = clamp(Number(state.maxBoostPercent) || 200, 1, MAX_LIMIT);
+  tabState.enabled = Boolean(state.enabled);
+  tabState.attached = Number(state.attached) || 0;
+  tabState.failed = Number(state.failed) || 0;
+  renderStatus();
+  if (statusOnly) {
+    return;
+  }
+  maxBoostPercent = clamp(Number(state.maxBoostPercent) || DEFAULT_MAX_PERCENT, 1, MAX_PERCENT);
   savedSites = Number(state.savedSites) || 0;
   updateMaxLabel();
   elements.perSiteToggle.checked = Boolean(state.perSite);
-  tabState.enabled = Boolean(state.enabled);
-  tabState.attached = Number(state.attached) || 0;
-  tabState.failed = Number(state.failed) || 0;
-  renderStatus();
   setSliderValue(Number(state.boostPercent) || 0);
-}
-
-// Only the counts can change while the popup is open; don't touch the slider
-// the user may be dragging.
-async function refreshStatus() {
-  const state = await sendMessage({ type: "getState", tabId: activeTabId });
-  if (!state || state.ok === false) {
-    return;
-  }
-  tabState.enabled = Boolean(state.enabled);
-  tabState.attached = Number(state.attached) || 0;
-  tabState.failed = Number(state.failed) || 0;
-  renderStatus();
 }
 
 async function init() {
@@ -168,7 +156,7 @@ async function init() {
     elements.favicon.style.opacity = "0";
   }
 
-  await refreshState();
+  await refresh();
 }
 
 function openMaxEditor() {
@@ -191,11 +179,8 @@ function closeMaxEditor(returnFocus) {
 }
 
 async function saveMax(value) {
-  const response = await sendMessage({ type: "setMaxBoost", value });
-  if (response && response.maxBoostPercent) {
-    maxBoostPercent = response.maxBoostPercent;
-  }
-  await refreshState();
+  await sendMessage({ type: "setMaxBoost", value });
+  await refresh();
 }
 
 function disarmForget() {
@@ -225,7 +210,7 @@ async function forgetSites() {
 
   disarmForget();
   const response = await sendMessage({ type: "resetSettings" });
-  await refreshState();
+  await refresh();
   if (response && response.ok) {
     showMessage("Settings reset");
   }
@@ -249,18 +234,11 @@ function setupEvents() {
       return;
     }
 
-    const enabled = elements.enabledToggle.checked;
-    const boostValue = Number(elements.boostSlider.value) || 0;
-
-    if (enabled) {
-      await sendMessage({ type: "setBoost", tabId: activeTabId, value: boostValue });
-    }
-
     const response = await sendMessage({
       type: "setEnabled",
       tabId: activeTabId,
-      value: enabled,
-      boostPercent: boostValue
+      value: elements.enabledToggle.checked,
+      boostPercent: Number(elements.boostSlider.value) || 0
     });
 
     if (!response || response.error) {
@@ -270,22 +248,15 @@ function setupEvents() {
       return;
     }
 
-    await refreshStatus();
+    await refresh({ statusOnly: true });
   });
 
   elements.perSiteToggle.addEventListener("change", async () => {
     if (activeTabId === null) {
       return;
     }
-    const response = await sendMessage({
-      type: "setPerSite",
-      tabId: activeTabId,
-      value: elements.perSiteToggle.checked
-    });
-    if (response && typeof response.perSite === "boolean") {
-      elements.perSiteToggle.checked = response.perSite;
-    }
-    await refreshState();
+    await sendMessage({ type: "setPerSite", tabId: activeTabId, value: elements.perSiteToggle.checked });
+    await refresh();
   });
 
   // Double-click opens the editor; so does Enter or Space (a keyboard
@@ -300,8 +271,8 @@ function setupEvents() {
   elements.maxEditor.addEventListener("submit", async (event) => {
     event.preventDefault();
     const parsed = Math.round(Number(elements.maxInput.value));
-    if (elements.maxInput.value.trim() === "" || !Number.isFinite(parsed) || parsed < 1 || parsed > MAX_LIMIT) {
-      showMessage("Max must be between 1% and " + MAX_LIMIT + "%");
+    if (elements.maxInput.value.trim() === "" || !Number.isFinite(parsed) || parsed < 1 || parsed > MAX_PERCENT) {
+      showMessage("Max must be between 1% and " + MAX_PERCENT + "%");
       elements.maxInput.select();
       return;
     }
@@ -334,7 +305,7 @@ function setupEvents() {
   API.runtime.onMessage.addListener((message) => {
     if (message && message.type === "statusChanged") {
       if (message.tabId === activeTabId) {
-        refreshStatus();
+        refresh({ statusOnly: true });
       }
       return Promise.resolve({ ok: true });
     }

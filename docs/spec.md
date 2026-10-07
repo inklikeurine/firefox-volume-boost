@@ -1,6 +1,6 @@
 # Volume Boost — product spec
 
-**Status:** 1.0. Released in the repository; not signed or listed on AMO.
+**Status:** 1.0.1. Released in the repository; not signed or listed on AMO.
 
 ## About
 
@@ -29,6 +29,9 @@
 - Boost is switched on and off per tab from the popup. It stays on in a tab
   until it is switched off there; switching tabs does not change it. Several
   tabs can be boosted at once, each at its own level.
+- When Volume Boost is reloaded, updated or re-enabled with a page open, media
+  it was boosting there goes back to 100% (it does not stay stuck at the old
+  level) and can be boosted again without reloading the page.
 - A boosted tab stays boosted through reloads and navigation. It keeps its
   level, unless per-site mode has a level saved for the new site.
 - Horizontal slider from 0% to a user-defined maximum (default 200%, hard cap
@@ -40,8 +43,12 @@
 - Forget saved sites: clears every per-site level and resets the maximum, the
   level and per-site mode to their defaults, after a second click to confirm.
   Boosted tabs stay on, at 100%.
-- A limiter (dynamics compressor) keeps high levels loud rather than distorted.
-- A warning in the popup at 300% and above.
+- A soft limiter keeps high levels loud rather than clipped: below 80% of full
+  scale the boosted sound is unchanged, and peaks above that are rounded off so
+  the output never passes full scale. 200% is +6 dB, 300% about +9 dB on
+  typical streaming audio; distortion becomes audible from about 300%, where
+  the popup warns.
+- A warning in the popup at 300% and above, next to the level.
 - The toolbar icon shows the level on a boosted tab.
 - The popup's status line says what is happening: Boost Off; Boost On; Boost
   On — no media found yet; Media on this page could not be boosted; Can't
@@ -79,6 +86,8 @@
 - `content.js` (every page and frame): builds the audio graph, attaches media
   elements, applies the gain, reports its counts.
 - `popup.html/.js/.css`: the controls; talks only to the background.
+- `lib/common.js`: loaded first in all three; the limits (1000% cap, 200%
+  default maximum) and the helpers they share.
 
 Details in [architecture.md](./architecture.md) and
 [messaging.md](./messaging.md).
