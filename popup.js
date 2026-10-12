@@ -1,24 +1,36 @@
 /* global API, MAX_PERCENT, DEFAULT_MAX_PERCENT, clamp */
 
 const WARN_AT = 300;
-const CONFIRM_MS = 4000;
+const UNITY = 100;
 
 const elements = {
   app: document.getElementById("app"),
+  faviconWrap: document.getElementById("faviconWrap"),
   favicon: document.getElementById("favicon"),
   tabTitle: document.getElementById("tabTitle"),
+  statusLine: document.getElementById("statusLine"),
   statusText: document.getElementById("statusText"),
   enabledToggle: document.getElementById("enabledToggle"),
-  boostSlider: document.getElementById("boostSlider"),
-  readout: document.getElementById("readout"),
+  level: document.getElementById("level"),
+  readoutValue: document.getElementById("readoutValue"),
+  dbText: document.getElementById("dbText"),
   resetBtn: document.getElementById("resetBtn"),
+  boostSlider: document.getElementById("boostSlider"),
+  sliderZone: document.getElementById("sliderZone"),
+  sliderNotch: document.getElementById("sliderNotch"),
+  unityLabel: document.getElementById("unityLabel"),
   maxLabel: document.getElementById("maxLabel"),
+  maxText: document.getElementById("maxText"),
   maxEditor: document.getElementById("maxEditor"),
   maxInput: document.getElementById("maxInput"),
   presets: Array.from(document.querySelectorAll("[data-preset]")),
   perSiteToggle: document.getElementById("perSiteToggle"),
   forgetBtn: document.getElementById("forgetBtn"),
-  warning: document.getElementById("warning")
+  footerNormal: document.getElementById("footerNormal"),
+  footerConfirm: document.getElementById("footerConfirm"),
+  confirmText: document.getElementById("confirmText"),
+  cancelForgetBtn: document.getElementById("cancelForgetBtn"),
+  confirmForgetBtn: document.getElementById("confirmForgetBtn")
 };
 
 const tabState = {
@@ -32,7 +44,6 @@ let maxBoostPercent = DEFAULT_MAX_PERCENT;
 let savedSites = 0;
 let rafId = null;
 let pendingBoost = null;
-let forgetTimer = null;
 
 function sendMessage(message) {
   return API.runtime.sendMessage(message).catch((err) => {
@@ -41,42 +52,80 @@ function sendMessage(message) {
   });
 }
 
-function setReadout(value) {
-  elements.readout.textContent = value + "%";
+// The gain in decibels: 200% is +6 dB. Whole decibels from 10 dB up.
+function formatDb(value) {
+  if (value <= 0) {
+    return "Muted";
+  }
+  const db = 20 * Math.log10(value / 100);
+  if (Math.abs(db) < 0.05) {
+    return "0 dB";
+  }
+  const size = Math.abs(db);
+  return (db > 0 ? "+" : "−") + size.toFixed(size >= 10 ? 0 : 1) + " dB";
 }
 
-function updateWarning(value) {
-  elements.warning.classList.toggle("show", value >= WARN_AT);
+// Everything that follows the level: readout, dB, warning, slider fill,
+// the highlighted preset and whether Reset has anything to do.
+function paintLevel(value) {
+  const warn = value >= WARN_AT;
+  elements.readoutValue.textContent = String(value);
+  elements.dbText.textContent = formatDb(value) + (warn ? " · may distort" : "");
+  elements.app.dataset.warn = warn ? "true" : "false";
+  elements.level.style.setProperty("--f", String(maxBoostPercent > 0 ? value / maxBoostPercent : 0));
+  elements.boostSlider.setAttribute("aria-valuetext", value + " percent" + (warn ? ", may distort" : ""));
+  elements.resetBtn.disabled = value === UNITY;
+  elements.presets.forEach((button) => {
+    const on = resolvePresetValue(button.getAttribute("data-preset")) === value;
+    button.setAttribute("aria-pressed", on ? "true" : "false");
+  });
 }
 
 function statusFor(state) {
   if (!state.enabled) {
-    return "Boost Off";
+    return { text: "Off for this tab", tone: "off" };
   }
   if (state.attached > 0) {
-    return "Boost On";
+    return { text: "Boosting this tab", tone: "on" };
   }
   if (state.failed > 0) {
-    return "Media on this page could not be boosted";
+    return { text: "On — this page's media can't be boosted", tone: "warn" };
   }
-  return "Boost On — no media found yet";
+  return { text: "On — waiting for audio or video", tone: "wait" };
+}
+
+function setStatusLine(text, tone) {
+  elements.statusText.textContent = text;
+  elements.statusText.title = text;
+  elements.statusLine.dataset.tone = tone;
 }
 
 function renderStatus() {
   elements.enabledToggle.checked = tabState.enabled;
   elements.enabledToggle.disabled = activeTabId === null;
   elements.app.dataset.enabled = tabState.enabled ? "true" : "false";
-  elements.statusText.textContent = statusFor(tabState);
+  const status = statusFor(tabState);
+  setStatusLine(status.text, status.tone);
 }
 
 // A one-off line in the status slot; the next renderStatus() replaces it.
-function showMessage(text) {
-  elements.statusText.textContent = text;
+// Problems are shown in the warning tone; other notes keep the current one.
+function showMessage(text, { problem = true } = {}) {
+  setStatusLine(text, problem ? "warn" : elements.statusLine.dataset.tone);
 }
 
 function updateMaxLabel() {
-  elements.maxLabel.textContent = "Max " + maxBoostPercent + "%";
+  elements.maxText.textContent = "Max " + maxBoostPercent + "%";
+  elements.maxLabel.setAttribute("aria-label", "Change maximum, now " + maxBoostPercent + "%");
   elements.boostSlider.max = String(maxBoostPercent);
+
+  const f100 = UNITY / maxBoostPercent;
+  elements.level.style.setProperty("--f100", String(f100));
+  elements.level.style.setProperty("--f300", String(Math.min(1, WARN_AT / maxBoostPercent)));
+  elements.sliderNotch.hidden = maxBoostPercent <= UNITY;
+  elements.sliderZone.hidden = maxBoostPercent <= WARN_AT;
+  // The 100% label only where it clears "0%" and the Max button.
+  elements.unityLabel.hidden = !(f100 > 0.15 && f100 < 0.72);
 }
 
 function resolvePresetValue(token) {
@@ -89,8 +138,7 @@ function resolvePresetValue(token) {
 function setSliderValue(value) {
   const clamped = clamp(value, 0, maxBoostPercent);
   elements.boostSlider.value = String(clamped);
-  setReadout(clamped);
-  updateWarning(clamped);
+  paintLevel(clamped);
   return clamped;
 }
 
@@ -142,6 +190,9 @@ async function refresh({ statusOnly = false } = {}) {
 }
 
 async function init() {
+  updateMaxLabel();
+  setSliderValue(UNITY);
+
   const tabs = await API.tabs.query({ active: true, currentWindow: true });
   const tab = tabs && tabs[0] ? tabs[0] : null;
   activeTabId = tab ? tab.id : null;
@@ -152,8 +203,7 @@ async function init() {
 
   if (tab && tab.favIconUrl) {
     elements.favicon.src = tab.favIconUrl;
-  } else {
-    elements.favicon.style.opacity = "0";
+    elements.faviconWrap.dataset.hasIcon = "true";
   }
 
   await refresh();
@@ -183,50 +233,53 @@ async function saveMax(value) {
   await refresh();
 }
 
-function disarmForget() {
-  if (forgetTimer) {
-    clearTimeout(forgetTimer);
-    forgetTimer = null;
+function openForgetConfirm() {
+  if (savedSites === 1) {
+    elements.confirmText.textContent = "Forget 1 site and reset?";
+  } else if (savedSites > 1) {
+    elements.confirmText.textContent = "Forget " + savedSites + " sites and reset?";
+  } else {
+    elements.confirmText.textContent = "Reset all settings?";
   }
-  elements.forgetBtn.textContent = "Forget saved sites";
+  elements.confirmForgetBtn.textContent = savedSites > 0 ? "Forget" : "Reset";
+  elements.footerNormal.hidden = true;
+  elements.footerConfirm.hidden = false;
+  elements.cancelForgetBtn.focus();
+}
+
+function closeForgetConfirm() {
+  if (elements.footerConfirm.hidden) {
+    return;
+  }
+  elements.footerConfirm.hidden = true;
+  elements.footerNormal.hidden = false;
+  elements.forgetBtn.focus();
 }
 
 async function forgetSites() {
-  if (!forgetTimer) {
-    forgetTimer = setTimeout(() => {
-      disarmForget();
-      renderStatus();
-    }, CONFIRM_MS);
-    elements.forgetBtn.textContent = "Click again to confirm";
-    if (savedSites === 1) {
-      showMessage("Forget 1 saved site and reset settings?");
-    } else if (savedSites > 1) {
-      showMessage("Forget " + savedSites + " saved sites and reset settings?");
-    } else {
-      showMessage("Reset settings to defaults?");
-    }
-    return;
-  }
-
-  disarmForget();
+  const hadSites = savedSites > 0;
+  closeForgetConfirm();
   const response = await sendMessage({ type: "resetSettings" });
   await refresh();
   if (response && response.ok) {
-    showMessage("Settings reset");
+    showMessage(hadSites ? "Saved sites forgotten, settings reset" : "Settings reset", { problem: false });
   }
 }
 
 function setupEvents() {
   elements.boostSlider.addEventListener("input", (event) => {
     const value = Number(event.target.value) || 0;
-    setReadout(value);
-    updateWarning(value);
+    paintLevel(value);
     scheduleBoostUpdate(value);
   });
 
   elements.resetBtn.addEventListener("click", () => {
-    const value = setSliderValue(100);
+    const value = setSliderValue(UNITY);
     scheduleBoostUpdate(value);
+  });
+
+  elements.favicon.addEventListener("error", () => {
+    elements.faviconWrap.dataset.hasIcon = "false";
   });
 
   elements.enabledToggle.addEventListener("change", async () => {
@@ -259,14 +312,7 @@ function setupEvents() {
     await refresh();
   });
 
-  // Double-click opens the editor; so does Enter or Space (a keyboard
-  // "click" has detail 0), while a single mouse click does nothing.
-  elements.maxLabel.addEventListener("dblclick", openMaxEditor);
-  elements.maxLabel.addEventListener("click", (event) => {
-    if (event.detail === 0) {
-      openMaxEditor();
-    }
-  });
+  elements.maxLabel.addEventListener("click", openMaxEditor);
 
   elements.maxEditor.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -298,7 +344,15 @@ function setupEvents() {
     });
   });
 
-  elements.forgetBtn.addEventListener("click", forgetSites);
+  elements.forgetBtn.addEventListener("click", openForgetConfirm);
+  elements.cancelForgetBtn.addEventListener("click", closeForgetConfirm);
+  elements.confirmForgetBtn.addEventListener("click", forgetSites);
+  elements.footerConfirm.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeForgetConfirm();
+    }
+  });
 
   // The background announces when a frame of this tab finds or loses media.
   // Other messages are the background's to answer.

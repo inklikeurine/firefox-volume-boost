@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.1.0] — 2026-10-12
+
+### Changed
+
+- Redesigned popup, same 360×271 size and the same controls: one flat
+  surface instead of the gradient background and inner card, the system
+  font, and tighter spacing.
+- The level is shown in decibels as well as percent (200% is +6 dB).
+- The slider marks 100% and shades the range above 300%. From 300% the level,
+  the slider and a "may distort" note turn amber, instead of a warning
+  squeezed in beside Reset.
+- With boost off, the level and slider are greyed: the level is kept but not
+  applied.
+- The preset matching the level is highlighted; Reset is greyed at 100%.
+- The maximum opens with a single click on **Max 200%** (now with a pencil
+  icon) instead of a double-click.
+- The status line has a coloured dot and new wording: "Off for this tab",
+  "Boosting this tab", "On — waiting for audio or video", "On — this page's
+  media can't be boosted".
+- **Remember per-site** is now **Remember level for this site**.
+- **Forget saved sites** sits in a footer and asks with **Cancel** and
+  **Forget** buttons, instead of "click again to confirm" that lapsed after
+  four seconds.
+
 ## [1.0.1] — 2026-10-06
 
 ### Fixed
