@@ -46,7 +46,8 @@ For the full explanation, see [docs/architecture.md](./docs/architecture.md).
 
 ## Installation
 
-There is no build step — the folder is loadable as-is.
+There is no build step — clone the repository
+(`git clone https://github.com/inklikeurine/firefox-volume-boost`); its folder loads as-is.
 
 ### Temporary install (for trying it out)
 
@@ -60,7 +61,7 @@ The extension is removed when Firefox restarts.
 
 ```sh
 npm install --global web-ext
-web-ext run --source-dir ./volume-boost
+web-ext run --source-dir .
 ```
 
 This launches a clean Firefox profile with the extension loaded and reloads it
@@ -69,12 +70,12 @@ automatically when a file changes.
 ### Permanent install
 
 Firefox only permanently installs signed extensions. Build a package with
-`web-ext build --source-dir ./volume-boost` and submit it to
+`web-ext build --source-dir .` and submit it to
 [addons.mozilla.org](https://addons.mozilla.org/developers/) for signing
 (unlisted self-distribution is fine). Details are in
 [docs/development.md](./docs/development.md#releasing).
 
-Source: https://github.com/inklikeurine/firefox-extensions/tree/main/volume-boost
+Source: https://github.com/inklikeurine/firefox-volume-boost
 
 ## Usage
 
@@ -165,5 +166,14 @@ before installing — it is short.
 
 ## License
 
-Public domain under [The Unlicense](../UNLICENSE). Copy it, fork it, sell it,
-strip the name off it — no attribution required.
+AI code generators are trained on enormous pools of public code, released under
+every license imaginable — permissive, copyleft, and non-commercial alike. The
+origin of any individual generated line is untraceable. Output built from that
+pool cannot honestly be owned by anyone.
+
+My position: code built from the commons belongs to the commons. Since no one
+can know which licenses any given line was originally released under,
+AI-generated code should be treated as unlicensable — public domain by default.
+
+Accordingly, all code in this repository is released into the public domain
+under the [Unlicense](UNLICENSE).

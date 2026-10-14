@@ -10,4 +10,4 @@
 
 The product spec is [spec.md](./spec.md) in this folder. The rules AI coding
 agents follow for every extension in this repository are in the root
-[`AGENTS.md`](../../AGENTS.md).
+[`AGENTS.md`](../AGENTS.md).

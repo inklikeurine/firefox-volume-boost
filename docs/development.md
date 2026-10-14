@@ -84,7 +84,7 @@ web-ext lint --source-dir ./volume-boost --warnings-as-errors
 ```
 
 CI runs this on every push and pull request (see
-[`.github/workflows/lint.yml`](../../.github/workflows/lint.yml)) and fails on
+[`.github/workflows/lint.yml`](../.github/workflows/lint.yml)) and fails on
 any warning.
 
 The manifest declares `data_collection_permissions: { required: ["none"] }`,
@@ -201,4 +201,4 @@ and can't see the popup, so run through this before every release.
 - Message handlers always respond, even on error.
 - Keep [docs/spec.md](./spec.md) in sync when behaviour or permissions change —
   it's the spec AI coding tools read before editing this extension; the
-  repo-wide rules are in the root [AGENTS.md](../../AGENTS.md).
+  the rules are in [AGENTS.md](../AGENTS.md), which imports the private workshop's rulebook.

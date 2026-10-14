@@ -150,6 +150,6 @@ this):
 ## Release checklist
 
 - Bump `version` in `manifest.json`; add the `CHANGELOG.md` entry.
-- `node .dev/tools/check.mjs` clean; `node .dev/harness/run.mjs volume-boost --spec` passes.
+- `node ../_workshop/tools/check.mjs` clean; `node ../_workshop/harness/run.mjs volume-boost --spec` passes.
 - Manual checklist in a fresh profile.
 - `web-ext build`; sign on AMO as unlisted once the owner has an AMO account.
