@@ -3,7 +3,7 @@
 A Firefox extension that boosts a tab's audio beyond 100%, with a built-in
 limiter to keep extreme boost levels from clipping into painful distortion.
 
-**Version:** 1.0.1 · **Manifest:** v2 · **Minimum Firefox:** 140 (desktop)
+**Version:** 1.1.0 · **Manifest:** v2 · **Minimum Firefox:** 140 (desktop)
 
 ## What it does
 
@@ -73,10 +73,12 @@ automatically when a file changes.
 
 ### Permanent install
 
-Firefox only permanently installs signed extensions. Build a package with
-`web-ext build --source-dir .` and submit it to
-[addons.mozilla.org](https://addons.mozilla.org/developers/) for signing
-(unlisted self-distribution is fine). Details are in
+Firefox only permanently installs signed extensions. Every
+[release](https://github.com/inklikeurine/firefox-volume-boost/releases)
+carries a build signed by Mozilla (unlisted, not on the add-ons site); the
+newest is always at
+<https://github.com/inklikeurine/firefox-volume-boost/releases/latest/download/volume-boost.xpi>.
+Open that link in Firefox to install it. How releases are signed:
 [docs/development.md](./docs/development.md#releasing).
 
 Source: https://github.com/inklikeurine/firefox-volume-boost

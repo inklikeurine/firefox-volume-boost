@@ -169,26 +169,20 @@ and can't see the popup, so run through this before every release.
 
 ## Releasing
 
-1. Bump `version` in `manifest.json`. Use semver; patch for fixes, minor for
-   features.
+1. If `version` in `manifest.json` is still the last pushed release's, bump
+   it (semver; patch for fixes, minor for features) and add the CHANGELOG
+   entry.
 2. Run the manual test checklist above.
-3. Lint: `web-ext lint --source-dir ./volume-boost --warnings-as-errors`.
-4. Build:
-   ```sh
-   web-ext build --source-dir ./volume-boost --overwrite-dest
-   ```
-   Output goes to `volume-boost/web-ext-artifacts/volume_boost-<version>.zip`
-   (git-ignored).
-5. Sign / publish. Firefox requires signing for permanent installs. Either:
-   - **Listed on AMO:** upload the zip at
-     <https://addons.mozilla.org/developers/>. The `webRequestBlocking` +
-     `<all_urls>` combination will trigger manual review; point reviewers at
-     [permissions.md](./permissions.md).
-   - **Self-distributed (unlisted):** sign via AMO with
-     `web-ext sign --source-dir ./volume-boost --api-key … --api-secret …
-     --channel unlisted` and distribute the resulting `.xpi` yourself.
-6. Tag the commit: `git tag volume-boost-v<version>`. Since this repo holds
-   multiple extensions, tags are prefixed with the extension name.
+3. Lint: `web-ext lint --source-dir . --warnings-as-errors`.
+4. Publish a GitHub release tagged `v<version>` (the manifest's `version`)
+   from `main`. The **Sign release** workflow
+   (`.github/workflows/release.yml`) submits it to
+   [addons.mozilla.org](https://addons.mozilla.org/developers/) as
+   **unlisted** (self-distributed) with the repository secrets
+   `AMO_JWT_ISSUER` and `AMO_JWT_SECRET`, and attaches the signed
+   `volume-boost.xpi` to the release.
+   `releases/latest/download/volume-boost.xpi` is always the newest; a
+   pre-release is skipped by that link.
 
 ## Code conventions
 

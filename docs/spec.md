@@ -163,4 +163,6 @@ this):
 - Bump `version` in `manifest.json`; add the `CHANGELOG.md` entry.
 - `node ../_workshop/tools/check.mjs` clean; `node ../_workshop/harness/run.mjs volume-boost --spec` passes.
 - Manual checklist in a fresh profile.
-- `web-ext build`; sign on AMO as unlisted once the owner has an AMO account.
+- Publish a GitHub release tagged `v<version>`; the Sign release workflow
+  signs it on AMO as unlisted and attaches `volume-boost.xpi`
+  ([development.md](./development.md#releasing)).

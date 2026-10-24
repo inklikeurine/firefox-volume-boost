@@ -1,0 +1,57 @@
+name: Sign release
+
+# Publishing a GitHub release tagged vX.Y.Z (X.Y.Z = manifest version) submits
+# the extension to AMO as unlisted and attaches the signed .xpi to the release
+# as volume-boost.xpi, so
+# releases/latest/download/volume-boost.xpi is always the newest one.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check the tag matches the manifest version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(node -p 'require("./manifest.json").version')
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::Tag $TAG does not match manifest version $version (expected v$version)"
+            exit 1
+          fi
+
+      - name: Install web-ext
+        run: npm install --global web-ext
+
+      # The repository root is the extension; the repo files and docs are not part of it.
+      - name: Sign on AMO (unlisted)
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: >
+          web-ext sign --source-dir . --artifacts-dir signed
+          --channel unlisted
+          --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET"
+          --timeout 2400000
+          --ignore-files AGENTS.md CLAUDE.md UNLICENSE README.md CHANGELOG.md "docs/**"
+
+      - name: Attach the signed .xpi to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          cp signed/*.xpi volume-boost.xpi
+          gh release upload "$TAG" volume-boost.xpi --clobber
