@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.1.0] — 2026-10-12
+## [1.1.0] — 2026-10-24
 
 ### Changed
 
@@ -16,9 +16,10 @@
 - The preset matching the level is highlighted; Reset is greyed at 100%.
 - The maximum opens with a single click on **Max 200%** (now with a pencil
   icon) instead of a double-click.
-- The status line has a coloured dot and new wording: "Off for this tab",
-  "Boosting this tab", "On — waiting for audio or video", "On — this page's
-  media can't be boosted".
+- The status line under the tab's title appears only when something needs
+  attention, with a coloured dot: "On — waiting for audio or video", "On —
+  this page's media can't be boosted", errors and notes. While boost is off,
+  or on and working, it is hidden; the switch shows the state.
 - **Remember per-site** is now **Remember level for this site**.
 - **Forget saved sites** sits in a footer and asks with **Cancel** and
   **Forget** buttons, instead of "click again to confirm" that lapsed after

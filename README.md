@@ -85,8 +85,9 @@ Source: https://github.com/inklikeurine/firefox-volume-boost
 
 1. Open a tab with playing audio or video.
 2. Click the Volume Boost toolbar icon.
-3. Flip the switch in the popup header on. The status line says
-   **Boosting this tab** once it has found the page's audio or video.
+3. Flip the switch in the popup header on. A line under the tab's title
+   appears only when something needs your attention, such as
+   **On — waiting for audio or video** or a page that can't be boosted.
 4. Drag the slider, click a preset, or press **Reset** to return to 100%.
 
 The boost stays on in that tab, even while you use other tabs, until you open

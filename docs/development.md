@@ -108,7 +108,7 @@ and can't see the popup, so run through this before every release.
 - [ ] **Reset** returns to 100% and the audio matches un-boosted playback.
 - [ ] Disabling boost returns the audio to normal level.
 - [ ] Switching to another tab and back leaves the first tab boosted (audibly,
-      and the popup on it still says Boosting this tab).
+      and the popup on it still has the switch on).
 - [ ] Two tabs boosted at different levels each keep their own level.
 - [ ] The toolbar icon shows the level on a boosted tab and nothing on others.
 - [ ] Reloading a boosted tab keeps it boosted at the same level, badge
@@ -139,8 +139,8 @@ and can't see the popup, so run through this before every release.
 - [ ] Tab title and favicon show in the header.
 - [ ] At ≥ 300% the readout, "may distort" and the slider turn amber; below,
       they don't. The slider shows the 100% mark and the hatched 300%+ range.
-- [ ] Status line reads "Boosting this tab" / "Off for this tab" and matches
-      actual state; "On — waiting for audio or video" on a page without media.
+- [ ] Status line is hidden with boost off and with boost on a playing
+      page; "On — waiting for audio or video" on a page without media.
 - [ ] Keyboard only: Tab reaches the switch (focus ring visible), Space flips
       it; Tab to **Max** and Enter opens the field.
 

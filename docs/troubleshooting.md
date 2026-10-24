@@ -19,7 +19,7 @@ Web Audio outputs silence for tainted media — but in that case you'd hear
 the cause. If you hear silence, see the next section.
 
 **The media element couldn't be attached.**
-Open the popup: if the status line says *"Media on this page could not be
+Open the popup: if the status line says *"On — this page's media can't be
 boosted"*, every element on the page and its embedded frames threw on
 `createMediaElementSource`. There is no fix from our side; the browser console
 has a `[volume-boost]` warning with the reason.
@@ -79,11 +79,12 @@ streaming players reject external `currentTime` writes.
 
 ## What the popup's status line means
 
+The line under the tab's title is hidden while boost is off, and while it is
+on with at least one media element routed through the boost. Otherwise:
+
 | Status text | Meaning |
 | --- | --- |
-| `Off for this tab` | This tab is not boosted. |
-| `Boosting this tab` | This tab is boosted and at least one media element is routed through the boost. |
-| `On — waiting for audio or video` | This tab is boosted, but no frame has media with a source yet. It changes to `Boosting this tab` when media appears. |
+| `On — waiting for audio or video` | This tab is boosted, but no frame has media with a source yet. The line goes away when media appears. |
 | `On — this page's media can't be boosted` | Boost *is* on, but every media element refused to attach. See above. |
 | `Can't boost this page. Try reloading it.` | No content script answered in this tab: Firefox's own pages (`about:`, `moz-extension:`…), addons.mozilla.org and the PDF viewer refuse them; a page still loading may not have one yet. |
 | `Max must be between 1% and 1000%` | The Max field got a non-number or a value outside 1–1000. |

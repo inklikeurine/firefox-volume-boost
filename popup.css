@@ -113,6 +113,10 @@ input[type="number"]:focus-visible {
   line-height: 17px;
 }
 
+.status-line[hidden] {
+  display: none;
+}
+
 .favicon {
   flex: none;
   width: 16px;

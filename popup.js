@@ -81,12 +81,14 @@ function paintLevel(value) {
   });
 }
 
+// Off and boosting need no words (the switch says it); the line is for
+// waiting, problems and notes.
 function statusFor(state) {
   if (!state.enabled) {
-    return { text: "Off for this tab", tone: "off" };
+    return { text: "", tone: "off" };
   }
   if (state.attached > 0) {
-    return { text: "Boosting this tab", tone: "on" };
+    return { text: "", tone: "on" };
   }
   if (state.failed > 0) {
     return { text: "On — this page's media can't be boosted", tone: "warn" };
@@ -95,6 +97,7 @@ function statusFor(state) {
 }
 
 function setStatusLine(text, tone) {
+  elements.statusLine.hidden = text === "";
   elements.statusText.textContent = text;
   elements.statusText.title = text;
   elements.statusLine.dataset.tone = tone;

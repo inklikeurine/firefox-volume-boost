@@ -56,10 +56,11 @@ Review not done yet. Not signed or listed on AMO.
 - From 300%: the readout, the dB note ("may distort") and the slider turn
   amber.
 - The toolbar icon shows the level on a boosted tab.
-- The popup's status line says what is happening, with a dot in the same
-  tone: Off for this tab; Boosting this tab; On — waiting for audio or video;
-  On — this page's media can't be boosted; Can't boost this page. Try
-  reloading it.
+- The popup's status line appears only when there is something to say, with
+  a dot in the same tone: On — waiting for audio or video; On — this page's
+  media can't be boosted; Can't boost this page. Try reloading it; and notes
+  such as "Saved sites forgotten, settings reset". While boost is off, or on
+  and working, the line is hidden and the switch shows the state.
 - Audio is boosted by a content script that attaches to the page's `<audio>`
   and `<video>` elements, in every frame, including media added after boost
   was switched on.
@@ -120,7 +121,8 @@ Which tabs are boosted is not stored: boost is off after Firefox restarts.
   changed by clicking the Max button (or Enter on it); a number field opens in
   place (Enter saves, Esc cancels).
 - Off greys the level and slider: the level is kept, not applied.
-- The status line always says whether boost is on for the current tab.
+- The switch always shows whether boost is on for the current tab; the
+  status line is hidden unless boost is waiting, failing or there is a note.
 
 ## Testing
 
@@ -128,8 +130,8 @@ Manual checklist (the click-list in the verification report is written from
 this):
 
 - Turn boost on on a page with audio → it is audibly louder, without crackling.
-- Switch to another tab and back → still boosted; the popup still says
-  Boosting this tab.
+- Switch to another tab and back → still boosted; the popup's switch is
+  still on, with no status line.
 - Boost a second tab → both stay boosted, each at its own level; each tab's
   icon badge shows its own level.
 - Reload a boosted tab → still boosted at the same level, badge back.

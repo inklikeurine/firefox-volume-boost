@@ -266,6 +266,9 @@ checkbox, Forget saved sites). Firefox sizes a browser-action popup from the
 `body`, with `overflow: hidden`. The `.app` column is a flex box with the
 footer pushed to the bottom; the tab title and the status line are one line
 each, cut with an ellipsis (the status text's full wording is its tooltip).
+The status line is `hidden` while its text is empty: boost off, or on with
+media attached. The header keeps its height, so the title then sits centred
+and nothing below moves.
 
 State is shown with data attributes on `.app`, so the CSS does the styling:
 `data-enabled` greys the readout and slider when boost is off, `data-warn`
