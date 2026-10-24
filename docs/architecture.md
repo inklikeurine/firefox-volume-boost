@@ -258,13 +258,26 @@ string.
 
 ## Popup
 
-The popup is a fixed 360×271 px layout, sized to its content; the distortion
-warning sits in the readout row between the level and Reset, so it needs no
-row of its own. Firefox sizes a browser-action popup
-from the `<body>`'s layout, so `width`/`height` (and `min-` versions) are set on
-`body`, with `overflow: hidden`, and the `.app` grid has one
-`minmax(0, 1fr)` column so a long tab title is cut with an ellipsis instead of
-widening the popup. The header reserves two lines for the status text.
+The popup is a fixed 360×271 px layout on one flat surface, top to bottom:
+header (tab icon and title, status line, switch), level (readout with dB,
+Reset; slider; 0% / 100% / Max scale), presets, and a footer (per-site
+checkbox, Forget saved sites). Firefox sizes a browser-action popup from the
+`<body>`'s layout, so `width`/`height` (and `min-` versions) are set on
+`body`, with `overflow: hidden`. The `.app` column is a flex box with the
+footer pushed to the bottom; the tab title and the status line are one line
+each, cut with an ellipsis (the status text's full wording is its tooltip).
+
+State is shown with data attributes on `.app`, so the CSS does the styling:
+`data-enabled` greys the readout and slider when boost is off, `data-warn`
+(level ≥ 300%) turns them amber and shows the warning icon. The status line's
+`data-tone` (`off`, `on`, `wait`, `warn`) colours its dot and text.
+
+The slider is the native range input with a transparent track; only its thumb
+is drawn. Under it, `<span>`s draw the track, the fill (amber past 300%), the
+notch at 100% and the hatched zone above 300%. Their positions come from three
+custom properties on `.level` that `popup.js` sets: `--f` (level / max),
+`--f100` and `--f300` (where 100% and 300% fall); a value's centre is at
+`(width − 20px) × f + 10px`, the thumb being 20 px wide.
 
 On open it:
 
@@ -274,8 +287,7 @@ On open it:
 
 Slider `input` events update the readout immediately; the `setBoost` message is
 coalesced with `requestAnimationFrame`, so at most one message per frame is sent
-while dragging. The slider's filled part is the `::-moz-range-progress`
-pseudo-element.
+while dragging.
 
 Enabling boost from the popup is one `setEnabled` with the slider's value. If
 the background reports an error the toggle is flipped back and the error text
@@ -284,11 +296,11 @@ replaces the status line. While the popup is open, the background sends it
 re-reads `getState` and updates the status line only (not the slider, which
 the user may be dragging).
 
-The Max label is a button: double-click, or a keyboard activation (Enter or
-Space — a click with `detail === 0`), opens a number field in its place. Enter
-saves a value from 1 to 1000; anything else shows a message and keeps the
-field open; Esc or leaving the field cancels. **Forget saved sites** needs a
-second click within four seconds.
+The Max label is a button: a click (or Enter or Space) opens a number field in
+its place. Enter saves a value from 1 to 1000; anything else shows a message
+and keeps the field open; Esc or leaving the field cancels. **Forget saved
+sites** swaps the footer for a question with **Cancel** (focused) and
+**Forget**; Esc cancels too.
 
 The on/off switch is a real checkbox made transparent over the drawn track, so
 it stays in the tab order and gets a focus ring. All popup text is 13 px or

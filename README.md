@@ -14,17 +14,21 @@ limiter to keep extreme boost levels from clipping into painful distortion.
   looking at is boosted.
 - Horizontal slider from 0% up to a user-defined maximum (default 200%, hard
   cap 1000%) with a live percentage readout.
-- One-click presets: 10%, 50%, 80%, 100%, 120%, and MAX.
+- One-click presets: 10%, 50%, 80%, 100%, 120%, and Max; the one you're on
+  is highlighted.
+- The level is also shown in decibels (200% is +6 dB), and the slider marks
+  100%.
 - **Reset** button returns the tab to 100%.
-- **Remember per-site** mode that stores a separate boost level for
-  each site origin.
+- **Remember level for this site** stores a separate boost level for each
+  site origin.
 - **Forget saved sites** clears every remembered level and puts the settings
   back to their defaults.
 - A soft limiter rounds off the loudest peaks instead of letting them clip, so
   the sound is unchanged below its peaks and high boost levels stay loud
   without harsh crackle.
 - Popup follows the system light/dark theme and works from the keyboard.
-- A warning appears next to the level when boost is set to 300% or higher.
+- From 300%, where distortion becomes audible, the level and the slider turn
+  amber and say "may distort"; the slider shades that range.
 - The popup says when boost is on but the page has no media yet, and when the
   page's media could not be boosted.
 
@@ -81,7 +85,8 @@ Source: https://github.com/inklikeurine/firefox-volume-boost
 
 1. Open a tab with playing audio or video.
 2. Click the Volume Boost toolbar icon.
-3. Flip the toggle in the popup header to **Boost On**.
+3. Flip the switch in the popup header on. The status line says
+   **Boosting this tab** once it has found the page's audio or video.
 4. Drag the slider, click a preset, or press **Reset** to return to 100%.
 
 The boost stays on in that tab, even while you use other tabs, until you open
@@ -93,23 +98,24 @@ controls, Space flips the toggle, and the arrow keys move the slider.
 
 ### Changing the maximum
 
-Double-click the **Max 200%** label under the slider and enter a new value
-(1–1000). The slider range and the MAX preset update immediately, and the
-setting persists. From the keyboard, Tab to the label and press Enter; then
-type the value and press Enter to save, or Esc to cancel.
+Click **Max 200%** (with the pencil) under the slider and enter a new value
+(1–1000). The slider range and the Max preset update immediately, and the
+setting persists. From the keyboard, Tab to it and press Enter; then type the
+value and press Enter to save, or Esc to cancel.
 
 ### Per-site levels
 
-Tick **Remember per-site**. From then on the boost value you set is saved
+Tick **Remember level for this site**. From then on the boost value you set is saved
 against the current site's origin (e.g. `https://www.youtube.com`) and restored
 the next time you enable boost on that site. Sites without a saved value fall
 back to the global level.
 
 ### Forgetting saved sites
 
-Click **Forget saved sites**, then click it again within a few seconds to
-confirm. Every per-site level is forgotten, and the maximum (200%), the boost
-level (100%) and **Remember per-site** (off) go back to their defaults. Tabs
+Click **Forget saved sites** at the bottom of the popup. It asks first
+("Forget 2 sites and reset?"): click **Forget** to go ahead, or **Cancel**
+(or press Esc) to keep everything. Every per-site level is forgotten, and the maximum (200%), the boost
+level (100%) and **Remember level for this site** (off) go back to their defaults. Tabs
 that are boosted stay on, at 100%.
 
 ## Permissions
@@ -136,7 +142,7 @@ Firefox's local extension storage, and the manifest declares
 - **Muted tabs** stay silent — boost multiplies whatever the page is outputting.
 - **Some cross-origin media** still refuses CORS-mode loading even with the
   injected header (e.g. servers that reject the `Origin` header outright).
-  The popup shows "Media on this page could not be boosted" when every element
+  The popup shows "On — this page's media can't be boosted" when every element
   on the page failed to attach.
 - **Restricted pages** (`about:*`, `moz-extension:*`, addons.mozilla.org,
   the built-in PDF viewer) don't allow content scripts; turning boost on there

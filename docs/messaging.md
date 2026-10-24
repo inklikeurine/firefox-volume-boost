@@ -229,7 +229,7 @@ Popup                       Background                        Content script (ea
   │ getState → status line       │                                   │
   │                              │◀──────────────────────────────────│ frameStatus {attached, failed}
   │◀─────────────────────────────│ statusChanged {tabId}             │
-  │ getState → "Boost On"        │                                   │
+  │ getState → "Boosting…"       │                                   │
 ```
 
 ## Sequence: a frame loads into a boosted tab

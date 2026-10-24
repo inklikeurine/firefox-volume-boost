@@ -35,7 +35,7 @@ After Volume Boost is reloaded or updated, it takes over media that its earlier
 copy was boosting, at 100%. If a page still behaves oddly, reload the page.
 
 **The media element hasn't been found.**
-If the status line says *"Boost On — no media found yet"*, no frame of the page
+If the status line says *"On — waiting for audio or video"*, no frame of the page
 has a media element with a source. A player that adds its `<video>` later, or
 gives it a source later, is picked up as soon as it does. Two cases are never
 found: media the page plays without adding it to the document, and elements
@@ -81,10 +81,10 @@ streaming players reject external `currentTime` writes.
 
 | Status text | Meaning |
 | --- | --- |
-| `Boost Off` | This tab is not boosted. |
-| `Boost On` | This tab is boosted and at least one media element is routed through the boost. |
-| `Boost On — no media found yet` | This tab is boosted, but no frame has media with a source yet. It changes to `Boost On` when media appears. |
-| `Media on this page could not be boosted` | Boost *is* on, but every media element refused to attach. See above. |
+| `Off for this tab` | This tab is not boosted. |
+| `Boosting this tab` | This tab is boosted and at least one media element is routed through the boost. |
+| `On — waiting for audio or video` | This tab is boosted, but no frame has media with a source yet. It changes to `Boosting this tab` when media appears. |
+| `On — this page's media can't be boosted` | Boost *is* on, but every media element refused to attach. See above. |
 | `Can't boost this page. Try reloading it.` | No content script answered in this tab: Firefox's own pages (`about:`, `moz-extension:`…), addons.mozilla.org and the PDF viewer refuse them; a page still loading may not have one yet. |
 | `Max must be between 1% and 1000%` | The Max field got a non-number or a value outside 1–1000. |
 

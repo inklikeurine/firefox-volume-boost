@@ -7,15 +7,22 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <div class="app" id="app" data-enabled="false">
+    <div class="app" id="app" data-enabled="false" data-warn="false">
       <header class="header">
-        <div class="tab-info">
-          <div class="favicon-wrap">
-            <img id="favicon" alt="" />
+        <div class="tab-meta">
+          <div class="tab-line">
+            <span class="favicon" id="faviconWrap" data-has-icon="false">
+              <img id="favicon" alt="" width="16" height="16" />
+              <svg class="favicon-fallback" aria-hidden="true" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round">
+                <rect x="1.75" y="3.75" width="16.5" height="12.5" rx="3" />
+                <path d="M8.5 7.5v5l4-2.5z" />
+              </svg>
+            </span>
+            <span class="tab-title" id="tabTitle">Active Tab</span>
           </div>
-          <div class="tab-meta">
-            <div class="tab-title" id="tabTitle">Active Tab</div>
-            <div class="tab-status" id="statusText" role="status" aria-live="polite">Boost Off</div>
+          <div class="status-line" id="statusLine" data-tone="off">
+            <span class="dot-slot" aria-hidden="true"><span class="dot"></span></span>
+            <span class="tab-status" id="statusText" role="status" aria-live="polite">Off for this tab</span>
           </div>
         </div>
         <label class="toggle">
@@ -24,29 +31,53 @@
         </label>
       </header>
 
-      <section class="slider-section">
-        <div class="readout-row">
-          <div class="readout" id="readout">100%</div>
-          <div class="warning" id="warning" role="status">Extreme boost can distort audio.</div>
-          <button class="ghost" id="resetBtn" type="button">Reset</button>
+      <section class="level" id="level" aria-label="Boost level">
+        <div class="level-row">
+          <div class="readout" id="readout"><span id="readoutValue">100</span><span class="unit">%</span></div>
+          <div class="level-note" id="levelNote">
+            <svg class="warn-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+              <path d="M12 9v4" />
+              <path d="M12 17h.01" />
+            </svg>
+            <span id="dbText">0 dB</span>
+          </div>
+          <button class="ghost reset" id="resetBtn" type="button">
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+            Reset
+          </button>
         </div>
-        <input
-          type="range"
-          id="boostSlider"
-          min="0"
-          max="200"
-          value="100"
-          step="1"
-          aria-label="Boost percent"
-        />
-        <div class="slider-labels">
+
+        <div class="slider">
+          <span class="slider-track" aria-hidden="true"></span>
+          <span class="slider-zone" id="sliderZone" aria-hidden="true"></span>
+          <span class="slider-fill" aria-hidden="true"></span>
+          <span class="slider-fill-warn" aria-hidden="true"></span>
+          <span class="slider-notch" id="sliderNotch" aria-hidden="true"></span>
+          <input
+            type="range"
+            id="boostSlider"
+            min="0"
+            max="200"
+            value="100"
+            step="1"
+            aria-label="Boost level"
+          />
+        </div>
+
+        <div class="scale">
           <span>0%</span>
-          <button
-            class="max-button"
-            id="maxLabel"
-            type="button"
-            title="Double-click, or press Enter, to change the maximum"
-          >Max 200%</button>
+          <span class="unity-label" id="unityLabel" aria-hidden="true">100%</span>
+          <button class="max-button" id="maxLabel" type="button" aria-label="Change maximum, now 200%">
+            <span id="maxText">Max 200%</span>
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+          </button>
           <form class="max-editor" id="maxEditor" novalidate hidden>
             <label for="maxInput">Max</label>
             <input id="maxInput" type="number" min="1" max="1000" step="1" />
@@ -55,22 +86,31 @@
         </div>
       </section>
 
-      <section class="presets" id="presets">
-        <button class="chip" type="button" data-preset="10">10%</button>
-        <button class="chip" type="button" data-preset="50">50%</button>
-        <button class="chip" type="button" data-preset="80">80%</button>
-        <button class="chip" type="button" data-preset="100">100%</button>
-        <button class="chip" type="button" data-preset="120">120%</button>
-        <button class="chip" type="button" data-preset="max">MAX</button>
+      <section class="presets" id="presets" aria-label="Presets">
+        <button class="chip" type="button" data-preset="10" aria-pressed="false">10%</button>
+        <button class="chip" type="button" data-preset="50" aria-pressed="false">50%</button>
+        <button class="chip" type="button" data-preset="80" aria-pressed="false">80%</button>
+        <button class="chip" type="button" data-preset="100" aria-pressed="false">100%</button>
+        <button class="chip" type="button" data-preset="120" aria-pressed="false">120%</button>
+        <button class="chip" type="button" data-preset="max" aria-pressed="false">Max</button>
       </section>
 
-      <section class="options">
-        <label class="option">
-          <input type="checkbox" id="perSiteToggle" />
-          Remember per-site
-        </label>
-        <button class="ghost" id="forgetBtn" type="button">Forget saved sites</button>
-      </section>
+      <footer class="footer">
+        <div class="footer-row" id="footerNormal">
+          <label class="option">
+            <input type="checkbox" id="perSiteToggle" />
+            Remember level for this site
+          </label>
+          <button class="link" id="forgetBtn" type="button">Forget saved sites</button>
+        </div>
+        <div class="footer-row" id="footerConfirm" role="group" aria-labelledby="confirmText" hidden>
+          <span class="confirm-text" id="confirmText">Reset all settings?</span>
+          <span class="confirm-actions">
+            <button class="ghost" id="cancelForgetBtn" type="button">Cancel</button>
+            <button class="danger" id="confirmForgetBtn" type="button">Reset</button>
+          </span>
+        </div>
+      </footer>
     </div>
 
     <script src="lib/common.js"></script>

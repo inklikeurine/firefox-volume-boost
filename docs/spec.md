@@ -1,7 +1,7 @@
 # Volume Boost — product spec
 
-**Status:** 1.0.1. Validated, Automated Test and Manual Review. Released in the
-repository; not signed or listed on AMO.
+**Status:** 1.1.0 (redesigned popup). Validated; Automated Test and Manual
+Review not done yet. Not signed or listed on AMO.
 
 ## About
 
@@ -37,23 +37,29 @@ repository; not signed or listed on AMO.
   level, unless per-site mode has a level saved for the new site.
 - Horizontal slider from 0% to a user-defined maximum (default 200%, hard cap
   1000%), with a live percentage readout.
-- Presets: 10%, 50%, 80%, 100%, 120%, MAX (the current maximum).
+- Presets: 10%, 50%, 80%, 100%, 120%, Max (the current maximum). The preset
+  matching the level is highlighted.
 - Reset returns the level to 100%.
-- Remember per-site (opt-in): the level is saved per site origin and restored
+- Remember level for this site (opt-in): the level is saved per site origin and restored
   when boost is switched on there.
 - Forget saved sites: clears every per-site level and resets the maximum, the
-  level and per-site mode to their defaults, after a second click to confirm.
+  level and per-site mode to their defaults, after an explicit confirm
+  (Forget / Cancel).
   Boosted tabs stay on, at 100%.
 - A soft limiter keeps high levels loud rather than clipped: below 80% of full
   scale the boosted sound is unchanged, and peaks above that are rounded off so
   the output never passes full scale. 200% is +6 dB, 300% about +9 dB on
   typical streaming audio; distortion becomes audible from about 300%, where
   the popup warns.
-- A warning in the popup at 300% and above, next to the level.
+- The readout shows the level in % and in dB (20·log10 of the gain; Muted at
+  0%). The slider marks 100% and shades the range above 300%.
+- From 300%: the readout, the dB note ("may distort") and the slider turn
+  amber.
 - The toolbar icon shows the level on a boosted tab.
-- The popup's status line says what is happening: Boost Off; Boost On; Boost
-  On — no media found yet; Media on this page could not be boosted; Can't
-  boost this page. Try reloading it.
+- The popup's status line says what is happening, with a dot in the same
+  tone: Off for this tab; Boosting this tab; On — waiting for audio or video;
+  On — this page's media can't be boosted; Can't boost this page. Try
+  reloading it.
 - Audio is boosted by a content script that attaches to the page's `<audio>`
   and `<video>` elements, in every frame, including media added after boost
   was switched on.
@@ -108,10 +114,12 @@ Which tabs are boosted is not stored: boost is off after Firefox restarts.
 
 ## UI requirements
 
-- Fixed-size popup, follows the system light/dark theme, text 13 px or larger.
+- Fixed-size 360×271 popup, follows the system light/dark theme, text 13 px or
+  larger, system font.
 - Every control is reachable and operable from the keyboard. The maximum is
-  changed by double-clicking the Max label, or focusing it and pressing Enter;
-  a number field opens in place (Enter saves, Esc cancels).
+  changed by clicking the Max button (or Enter on it); a number field opens in
+  place (Enter saves, Esc cancels).
+- Off greys the level and slider: the level is kept, not applied.
 - The status line always says whether boost is on for the current tab.
 
 ## Testing
@@ -121,16 +129,17 @@ this):
 
 - Turn boost on on a page with audio → it is audibly louder, without crackling.
 - Switch to another tab and back → still boosted; the popup still says
-  Boost On.
+  Boosting this tab.
 - Boost a second tab → both stay boosted, each at its own level; each tab's
   icon badge shows its own level.
 - Reload a boosted tab → still boosted at the same level, badge back.
-- Reset → 100%; each preset → its level; MAX → the maximum.
-- Change the maximum (double-click, and keyboard) → slider range and MAX follow;
+- Reset → 100%; each preset → its level and highlighted; Max → the maximum.
+- Change the maximum (click, and keyboard) → slider range and Max follow;
   survives reopening the popup and restarting Firefox.
-- Warning appears at 300% and disappears below.
+- Amber warning appears at 300% and disappears below; dB matches the level.
 - Remember per-site: two sites at different levels each get theirs back.
-- Forget saved sites: asks first; then levels forgotten and defaults restored.
+- Forget saved sites: asks first (Cancel keeps everything); Forget → levels
+  forgotten and defaults restored.
 - A page with an embedded player (iframe) → the player is boosted.
 - A cross-origin `<video>` (CDN-hosted) → boosted, not silent.
 - `about:addons` → turning boost on says "Can't boost this page. Try
