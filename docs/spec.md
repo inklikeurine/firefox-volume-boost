@@ -160,8 +160,8 @@ this):
 
 ## Release checklist
 
-- Bump `version` in `manifest.json`; add the `CHANGELOG.md` entry.
-- `node ../_workshop/tools/check.mjs` clean; `node ../_workshop/harness/run.mjs volume-boost --spec` passes.
+- In one release pull request: bump `version` in `manifest.json` once for the whole batch, and add the `CHANGELOG.md` entry.
+- `node ../firefox-tools/tools/check.mjs volume-boost` clean; `node ../firefox-tools/harness/run.mjs volume-boost --spec` passes.
 - Manual checklist in a fresh profile.
 - Publish a GitHub release tagged `v<version>`; the Sign release workflow
   signs it on AMO as unlisted and attaches `volume-boost.xpi`

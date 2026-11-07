@@ -195,4 +195,4 @@ and can't see the popup, so run through this before every release.
 - Message handlers always respond, even on error.
 - Keep [docs/spec.md](./spec.md) in sync when behaviour or permissions change —
   it's the spec AI coding tools read before editing this extension; the
-  the rules are in [AGENTS.md](../AGENTS.md), which imports the private workshop's rulebook.
+  rules are in [AGENTS.md](../AGENTS.md).
