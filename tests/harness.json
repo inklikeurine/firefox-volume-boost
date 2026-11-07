@@ -1,0 +1,48 @@
+{
+  "tests": true,
+  "live": true,
+  "fixture": "media",
+  "routes": { "https://media.test/": "frame" },
+  "wait": 1000,
+  "evals": [
+    "(await handleGetState(__harness.fixtureTabId)).enabled === false",
+    "(await handleSetEnabled(__harness.fixtureTabId, true, 150)).enabled === true",
+    "sleep 0.8",
+    "(function (top) { return top.attached === 3 && top.failed === 0; })(mediaCounts.get(__harness.fixtureTabId).get(0))",
+    "(function (s) { return s.enabled === true && s.attached === 4 && s.failed === 0; })(await handleGetState(__harness.fixtureTabId))",
+    "typeof injectCorsHeaders === 'function' && browser.webRequest.onHeadersReceived.hasListener(injectCorsHeaders) === true",
+    "(await browser.browserAction.getBadgeText({ tabId: __harness.fixtureTabId })) === '150'",
+    "(globalThis.__otherTab = await browser.tabs.create({ url: 'about:blank', active: true })).id > 0",
+    "sleep 0.5",
+    "(function (s) { return s.enabled === true && s.boostPercent === 150; })(await handleGetState(__harness.fixtureTabId))",
+    "(await browser.browserAction.getBadgeText({ tabId: __harness.fixtureTabId })) === '150' && (await browser.browserAction.getBadgeText({ tabId: __otherTab.id })) === ''",
+    "(await browser.tabs.update(__harness.fixtureTabId, { active: true })).active === true",
+    "(await handleSetEnabled(__harness.fixtureTabId, false)).enabled === false",
+    "sleep 0.3",
+    "(await handleGetState(__harness.fixtureTabId)).enabled === false && (await browser.browserAction.getBadgeText({ tabId: __harness.fixtureTabId })) === ''",
+    "(await handleSetEnabled(__harness.fixtureTabId, true, 180)).enabled === true",
+    "sleep 0.5"
+  ],
+  "pageEvals": [
+    "document.getElementById('audio').crossOrigin === null",
+    "document.getElementById('remote').crossOrigin === 'anonymous'"
+  ],
+  "popupEvals": [
+    "document.title === 'Volume Boost'",
+    "document.getElementById('tabTitle').textContent.startsWith('Volume Boost fixture — a deliberately long')",
+    "document.getElementById('statusLine').hidden === true && getComputedStyle(document.getElementById('statusLine')).display === 'none' && document.getElementById('statusLine').dataset.tone === 'on'",
+    "document.getElementById('enabledToggle').checked === true",
+    "document.getElementById('readout').textContent === '180%'",
+    "document.getElementById('maxText').textContent === 'Max 200%'",
+    "document.getElementById('dbText').textContent === '+5.1 dB'",
+    "Number(document.getElementById('boostSlider').max) === 200",
+    "[...document.querySelectorAll('[data-preset]')].map((b) => b.textContent).join(' ') === '10% 50% 80% 100% 120% Max'",
+    "document.getElementById('sliderNotch').hidden === false && document.getElementById('sliderZone').hidden === true",
+    "document.getElementById('app').dataset.warn === 'false' && document.getElementById('app').dataset.enabled === 'true'",
+    "(() => { const t = document.getElementById('enabledToggle'); t.focus(); return getComputedStyle(t).display !== 'none' && document.activeElement === t; })()",
+    "[...document.querySelectorAll('body *')].filter((e) => [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())).every((e) => parseFloat(getComputedStyle(e).fontSize) >= 13)",
+    "(() => { const a = document.querySelector('.app'); return a.scrollHeight <= a.clientHeight && a.scrollWidth <= a.clientWidth && document.body.scrollHeight <= document.body.clientHeight && document.body.scrollWidth <= document.body.clientWidth; })()",
+    "await (async () => { const b = document.getElementById('maxLabel'); b.click(); const i = document.getElementById('maxInput'); if (document.activeElement !== i) return false; i.value = '300'; document.getElementById('maxEditor').requestSubmit(); await new Promise((r) => setTimeout(r, 400)); return document.getElementById('maxText').textContent === 'Max 300%' && !b.hidden; })()"
+  ],
+  "screenshot": false
+}

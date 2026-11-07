@@ -46,7 +46,7 @@ jobs:
           --channel unlisted
           --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET"
           --timeout 2400000
-          --ignore-files AGENTS.md CLAUDE.md UNLICENSE README.md CHANGELOG.md "docs/**"
+          --ignore-files AGENTS.md CLAUDE.md UNLICENSE README.md CHANGELOG.md "docs/**" "tests/**"
 
       - name: Attach the signed .xpi to the release
         env:
