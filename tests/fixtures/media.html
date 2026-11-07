@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Volume Boost fixture — a deliberately long page title that the popup header must cut short</title></head>
+  <body>
+    <h1>Volume Boost — media fixture</h1>
+    <p>One audio and one video element, both same-origin. The harness serves <code>/tone.wav</code> (0.5 s of silence) for both.</p>
+    <audio id="audio" src="/tone.wav" controls></audio>
+    <video id="video" src="/tone.wav" width="320" height="180"></video>
+    <p>A media element with no source, which the content script must skip:</p>
+    <audio id="empty"></audio>
+    <p>Cross-origin media from another origin, which must be reloaded in CORS mode and still load:</p>
+    <audio id="remote" src="https://media.test/tone.wav" preload="auto"></audio>
+    <p>An embedded player on that other origin (frame.html, one audio element):</p>
+    <iframe id="player" src="https://media.test/frame.html" width="320" height="80"></iframe>
+  </body>
+</html>
