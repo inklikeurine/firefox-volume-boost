@@ -67,7 +67,7 @@ Review not done yet. Not signed or listed on AMO.
 
 ## Optional / future functionality
 
-- Keyboard shortcut to toggle boost on the current tab.
+- Keyboard shortcut to toggle boost on the current tab: [#4](https://github.com/inklikeurine/firefox-volume-boost/issues/4)
 
 ## Permissions
 
